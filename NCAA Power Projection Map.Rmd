@@ -1,0 +1,257 @@
+---
+title: "NCAA MBB Power Projection Map"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+
+library(tidyverse)
+library(raster)
+library(data.table)
+library(ggimage)
+library(ggthemes)
+library(sf)
+library(tigris)
+library(leaflet)
+library(bslib)
+library(bsplus)
+
+# ncaa_scale <- espn_mbb_teams() %>%
+#   filter(!is.na(color)) %>%
+#   mutate(
+#     color = paste0("#", color),
+#     color2 = if_else(is.na(alternate_color), "#000000", paste0("#", alternate_color))
+#   ) %>%
+#   dplyr::select(team, color, color2)
+# 
+# write_csv(ncaa_scale, "ncaa_scale.csv")
+ncaa_scale <- read_csv("ncaa_scale.csv")
+
+# ds <- read_csv("schools_cities_coords_logos_fixed.csv")
+# 
+# ds <- ds %>%
+#   dplyr::select(!c(color, alternate_color))
+# 
+# ds <- merge(ds, ncaa_scale, by = "team")
+# 
+# # Need to clean data by hand and fix NAs, this is a stopgap
+# # ds <- ds %>%
+# #   filter(!is.na(lng),
+# #          conference == "Big 12 Conference")
+# 
+# # Power projection idea ================================================
+# 
+# 
+# ds_kp <- hoopR::kp_pomeroy_ratings(min_year = 2021, max_year = 2021)
+# 
+# ds <- left_join(ds, ds_kp) %>%
+#   filter(!is.na(lng))
+
+ds <- read_csv("dataset.csv")
+
+# pnts_sf <- st_as_sf(ds, coords = c("lng", "lat"))
+# st_crs(pnts_sf) <- 4326
+# 
+# counties <- counties(cb = TRUE, resolution = "20m")
+# st_crs(counties) <- 4326
+# 
+# counties <- counties %>%
+#   mutate(
+#     n = row_number()
+#   )
+# 
+# closest_ <- list()
+# for (i in seq_len(nrow(counties))) {
+#   closest_[[i]] <- pnts_sf[which.max(
+#     (ds$adj_em - 10) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
+#     ), ]
+#   print(paste0(100 * i / nrow(counties), "%"))
+# }
+# closest_ <- rbindlist(closest_)
+# 
+# closest_ <- closest_ %>%
+#   dplyr::select(team, color, logo) %>%
+#   mutate(
+#     n = row_number()
+#   )
+# 
+# counties_ <- left_join(counties, closest_, by = "n")
+# 
+# # Removes Alaska
+# counties_ <- counties_ %>%
+#   filter(STATEFP != "02")
+# 
+# counties_grouped <- counties_ %>%
+#   group_by(team, logo, color) %>%
+#   summarise(
+#     n = n(),
+#     sum_land = sum(ALAND) * 0.000000386102,
+#     sum_water = sum(AWATER) * 0.000000386102,
+#     sum_total = sum_land + sum_water
+#   ) %>%
+#   st_cast("MULTIPOLYGON")
+
+# save(counties_grouped, file = "counties_grouped.RData")
+
+load("counties_grouped.RData")
+
+# gg <- ggplot() + 
+#   geom_sf(data = counties_, size = 0.25, aes(fill = team, text = paste("Current Owner:", team))) +
+#   geom_sf(data = counties_grouped, color = "white", fill = NA) +
+#   geom_point(data = ds, aes(x = lng, y = lat, fill = team, 
+#                             text = paste("Capital:", team)), size = 2, shape = 21) +
+#   # geom_label_repel(data = ds %>% filter(adj_em > 0),
+#   #            aes(x = lng, y = lat, label = team)) +
+#   # geom_point(data = ds %>% slice_max(order_by = adj_em, n = 25), aes(x = lng, y = lat), color = "black", fill = "white", size = 12, shape = 21) +
+#   # geom_image(data = ds %>% slice_max(order_by = adj_em, n= 25),
+#   #            aes(x = lng, y = lat, image = logo), size = 0.017, asp = 1.5) +
+#   coord_sf(xlim = c(-128, -67), ylim = c(30, 45)) +
+#   scale_fill_manual(breaks = ncaa_scale$team, values = ncaa_scale$color) +
+#   scale_color_manual(breaks = ncaa_scale$team, values = ncaa_scale$color2) +
+#   guides(fill = "none", color = "none") +
+#   theme_map() +
+#   theme(legend.position = 'none')
+
+# counties_ %>%
+#   group_by(team) %>%
+#   summarize(
+#     total_area = sum(ALAND + AWATER)
+#   ) %>%
+#   slice_max(order_by = total_area, n = 10)
+```
+
+## Row {.tabset}
+
+### Power Projection Map
+
+```{r}
+
+fill_team <- colorFactor(counties_grouped$color, counties_grouped$team)
+
+logoIcons <- icons(
+  iconUrl = counties_grouped$logo,
+  iconWidth = 20, iconHeight = 20
+)
+
+leaflet() %>%
+  setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
+  addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~fill_team(team), fillOpacity = 0.8, label = ~team,
+              highlightOptions = highlightOptions(color = 'white', weight = 1, 
+                                                  bringToFront = FALSE)) %>%
+  addCircleMarkers(data = ds, label = ~team, stroke = F, fillOpacity = 0.8, color = ~color, radius = 5, 
+                   popup = paste0("<center><img src=", ds$logo, " width = '50' height = '50'></center>", 
+                                  "<br><hr><b>", ds$display_name,
+                                  "</b><br>", ds$conference,
+                                  "<br>W/L Rate: ", ds$w_l,
+                                  "<br>Adj. EM: ", ds$adj_em, " (Rank: ", ds$rk, ")",
+                                  "<br>Adj. O: ", ds$adj_o, " (Rank: ", ds$adj_o_rk, ")",
+                                  "<br>Adj. D: ", ds$adj_d, " (Rank: ", ds$adj_d_rk, ")"
+                                  )) %>%
+  addCircleMarkers(data = st_centroid(counties_grouped), label = "", 
+                   stroke = F, color = "white", fill = "white", fillOpacity = 1) %>%
+  addMarkers(data = st_centroid(counties_grouped), label = ~team, popup = paste0(
+    "<center><b>", counties_grouped$team, "'s</b> Domain<br></center>",
+    "<hr>",
+    "Total land area: ", format(round(counties_grouped$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+    "Total water area: ", format(round(counties_grouped$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+    "No. of Counties: ", format(counties_grouped$n, nsmall = 1, big.mark = ",")
+  ),
+             icon = logoIcons) %>%
+  addTiles() %>%
+  setMaxBounds(lng1 = -130,
+               lat1 = 25,
+               lng2 = -65,
+               lat2 = 50)
+  
+```
+
+> Each county is "controlled" by the school with the highest "power projection" score relative to that county. This score is equal to schools' Kenpom Adj. Efficiency Margin (minimum +10) multiplied by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach". Data source: [Kenpom.com](https://kenpom.com/)
+
+### Closest Undefeated Team
+
+```{r}
+
+```
+
+## Row
+
+### Biggest Domain {.no-mobile}
+
+```{r}
+top_domain <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = team)
+
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = team)
+    ),
+    color = ncaa_scale %>% filter(team == top_domain) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
+  )
+  
+})
+```
+
+### Biggest Water Domain {.no-mobile}
+
+```{r}
+top_water <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = team)
+
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = team)
+    ),
+    color = ncaa_scale %>% filter(team == top_water) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
+  )
+  
+})
+```
+
+### Biggest Land Domain {.no-mobile}
+
+```{r}
+top_land <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = team)
+
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = team)
+    ),
+    color = ncaa_scale %>% filter(team == top_land) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
+  )
+  
+})
+```
+
+### Most Counties Controlled {.no-mobile}
+
+```{r}
+top_counties <- counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = team)
+
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = team)
+    ),
+    color = ncaa_scale %>% filter(team == top_counties) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = n), 1), nsmall = 1, big.mark = ","), "counties")
+  )
+  
+})
+```

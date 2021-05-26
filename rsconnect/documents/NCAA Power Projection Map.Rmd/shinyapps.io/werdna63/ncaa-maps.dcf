@@ -1,0 +1,13 @@
+name: ncaa-maps
+title: ncaa-maps
+username:
+account: werdna63
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4185687
+bundleId: 4639979
+url: https://werdna63.shinyapps.io/ncaa-maps/
+when: 1621994895.48009
+lastSyncTime: 1621994895.48011
+asMultiple: FALSE
+asStatic: FALSE
