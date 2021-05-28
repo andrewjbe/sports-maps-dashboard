@@ -1,5 +1,5 @@
 ---
-title: "NCAA MBB Power Projection Map"
+title: "NCAA Men's Basketball Maps | 2020-2021"
 runtime: shiny
 output: 
   flexdashboard::flex_dashboard:
@@ -20,6 +20,8 @@ library(tigris)
 library(leaflet)
 library(bslib)
 library(bsplus)
+library(tidycensus)
+library(DT)
 
 # ncaa_scale <- espn_mbb_teams() %>%
 #   filter(!is.na(color)) %>%
@@ -82,6 +84,17 @@ ds <- read_csv("dataset.csv")
 # 
 # counties_ <- left_join(counties, closest_, by = "n")
 # 
+# var_list <- c("B00001_001")
+# counties_pop <- get_acs(geography = "county", variables = var_list, year = 2018)
+# 
+# counties_ <- merge(counties_, counties_pop, by = "GEOID")
+# 
+# counties_ <- counties_ %>%
+#   rename(
+#     population = estimate
+#   ) %>%
+#   dplyr::select(!variable)
+# 
 # # Removes Alaska
 # counties_ <- counties_ %>%
 #   filter(STATEFP != "02")
@@ -92,10 +105,11 @@ ds <- read_csv("dataset.csv")
 #     n = n(),
 #     sum_land = sum(ALAND) * 0.000000386102,
 #     sum_water = sum(AWATER) * 0.000000386102,
-#     sum_total = sum_land + sum_water
+#     sum_total = sum_land + sum_water,
+#     total_pop = sum(population)
 #   ) %>%
 #   st_cast("MULTIPOLYGON")
-
+# 
 # save(counties_grouped, file = "counties_grouped.RData")
 
 load("counties_grouped.RData")
@@ -125,7 +139,10 @@ load("counties_grouped.RData")
 #   slice_max(order_by = total_area, n = 10)
 ```
 
-## Row {.tabset}
+Power Projection Map
+============================
+
+## Row
 
 ### Power Projection Map
 
@@ -159,7 +176,8 @@ leaflet() %>%
     "<hr>",
     "Total land area: ", format(round(counties_grouped$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
     "Total water area: ", format(round(counties_grouped$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
-    "No. of Counties: ", format(counties_grouped$n, nsmall = 1, big.mark = ",")
+    "No. of Counties: ", format(counties_grouped$n, nsmall = 1, big.mark = ","), "<br>",
+    "Total Population: ", format(counties_grouped$total_pop, big.mark = ",")
   ),
              icon = logoIcons) %>%
   addTiles() %>%
@@ -171,12 +189,6 @@ leaflet() %>%
 ```
 
 > Each county is "controlled" by the school with the highest "power projection" score relative to that county. This score is equal to schools' Kenpom Adj. Efficiency Margin (minimum +10) multiplied by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach". Data source: [Kenpom.com](https://kenpom.com/)
-
-### Closest Undefeated Team
-
-```{r}
-
-```
 
 ## Row
 
@@ -255,3 +267,70 @@ renderValueBox({
   
 })
 ```
+
+### Largest Population {.no-mobile}
+
+```{r}
+top_pop <- counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = team)
+
+renderValueBox({
+
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = team)
+    ),
+    color = ncaa_scale %>% filter(team == top_pop) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = total_pop), 1), big.mark = ","), "people")
+  )
+
+})
+```
+
+Power Projection Stats
+=====================================
+
+### Stat Explorer
+
+```{r}
+DT::renderDataTable({
+  
+  DT::datatable(
+    data = counties_grouped %>% 
+      dplyr::select(!c(color, logo)) %>%
+      st_drop_geometry() %>%
+      mutate(
+        sum_land = round(sum_land, 2),
+        sum_water = round(sum_water, 2),
+        sum_total = round(sum_total, 2),
+        total_pop = round(total_pop, 2)
+      ) %>%
+      rename(
+        Team = team,
+        'Counties Controlled' = n,
+        'Total Land Area (sq. mi.)' = sum_land,
+        'Total Water Area (sq. mi.)' = sum_water,
+        'Total Territory (sq. mi.)' = sum_total,
+        'Total Population' = total_pop
+      ),
+    rownames = FALSE
+  ) %>%
+  formatRound(c('Total Land Area (sq. mi.)', 'Total Water Area (sq. mi.)', 'Total Territory (sq. mi.)', 'Total Population'), digits = 0)
+  
+})
+
+```
+
+<!-- Closest Undefeated Team -->
+<!-- ================================ -->
+
+<!-- ```{r} -->
+
+<!-- ``` -->
+
+<!-- Imperialism Map -->
+<!-- ================================ -->
+
+<!-- ```{r} -->
+
+<!-- ``` -->
