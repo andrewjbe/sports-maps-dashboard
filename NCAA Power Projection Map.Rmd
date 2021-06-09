@@ -23,6 +23,8 @@ library(bsplus)
 library(tidycensus)
 library(DT)
 
+setwd("C:/Users/Andrew/Documents/GitHub/sports-maps-dashboard/")
+
 # ncaa_scale <- espn_mbb_teams() %>%
 #   filter(!is.na(color)) %>%
 #   mutate(
@@ -320,6 +322,44 @@ DT::renderDataTable({
 })
 
 ```
+
+Closest Undefeated Team
+================================
+
+### AP Top 25 Over Time
+
+```{r}
+
+# rankplot <- function(plot_title) {
+#   ggplot(tc %>%
+#                   file_year %in% c(2015, 2018, 2021)),
+#          aes(file_year, rank, color = ct_cat)) +
+#     geom_line(size = 2) +
+#     geom_label(aes(label = paste0(ct_cat, "\n(", n, ")")),
+#                color = "black",
+#                family = "Courier") +
+#     theme_ojo() +
+#     theme(legend.position = "none") +
+#     coord_cartesian(ylim=c(10, 1)) +
+#     scale_y_reverse(breaks = 1:10) +
+#     scale_x_continuous(breaks = c(2015, 2018, 2021),
+#                        limits = c(2013.5, 2022.5),
+#                        position = "top") +
+#     scale_color_viridis_d(option = "plasma") +
+#     labs(title = plot_title,
+#          subtitle = "Oklahoma County, 2015, 2018, and 2021 YTD",
+#          x = NULL,
+#          y = NULL) +
+#     theme(axis.ticks = element_blank(),
+#           panel.grid = element_blank(),
+#           panel.border = element_blank())
+# }
+# rankplot("CF", "Most common top offenses for felony cases")
+
+
+```
+
+
 
 <!-- Closest Undefeated Team -->
 <!-- ================================ -->
