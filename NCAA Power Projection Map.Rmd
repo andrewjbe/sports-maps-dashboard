@@ -5,6 +5,7 @@ output:
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
+    source_code: 'https://github.com/andrewjbe/sports-maps-dashboard'
 ---
 
 ```{r setup, include=FALSE}
@@ -27,8 +28,6 @@ library(bsplus)
 library(tidycensus)
 library(DT)
 library(hoopR)
-
-# setwd("C:/Users/Andrew/Documents/GitHub/sports-maps-dashboard/")
 
 # ncaa_scale <- espn_mbb_teams() %>%
 #   filter(!is.na(color)) %>%
