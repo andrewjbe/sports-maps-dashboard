@@ -14,16 +14,20 @@ library(tidyverse)
 library(raster)
 library(data.table)
 library(ggimage)
+library(lubridate)
 library(ggthemes)
 library(sf)
 library(tigris)
 library(leaflet)
+library(RCurl)
+library(png)
+library(plotly)
 library(bslib)
 library(bsplus)
 library(tidycensus)
 library(DT)
 
-setwd("C:/Users/Andrew/Documents/GitHub/sports-maps-dashboard/")
+# setwd("C:/Users/Andrew/Documents/GitHub/sports-maps-dashboard/")
 
 # ncaa_scale <- espn_mbb_teams() %>%
 #   filter(!is.na(color)) %>%
@@ -289,23 +293,27 @@ renderValueBox({
 })
 ```
 
-Power Projection Stats
+Power Projection Stats 
 =====================================
 
-### Stat Explorer
+Row {.tabset}
+--------------
+
+### Power Projection Stat Explorer
 
 ```{r}
 DT::renderDataTable({
   
   DT::datatable(
     data = counties_grouped %>% 
-      dplyr::select(!c(color, logo)) %>%
+      dplyr::select(c(logo, team, n, sum_land, sum_water, sum_total, total_pop)) %>%
       st_drop_geometry() %>%
       mutate(
         sum_land = round(sum_land, 2),
         sum_water = round(sum_water, 2),
         sum_total = round(sum_total, 2),
-        total_pop = round(total_pop, 2)
+        total_pop = round(total_pop, 2),
+        logo = paste0("<img src='", logo, "' width='50' height='50'>")
       ) %>%
       rename(
         Team = team,
@@ -315,7 +323,10 @@ DT::renderDataTable({
         'Total Territory (sq. mi.)' = sum_total,
         'Total Population' = total_pop
       ),
-    rownames = FALSE
+    rownames = FALSE, options = list(scrollY = 600, pageLength = 100, dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
+    extensions = 'Buttons',
+    escape = FALSE
   ) %>%
   formatRound(c('Total Land Area (sq. mi.)', 'Total Water Area (sq. mi.)', 'Total Territory (sq. mi.)', 'Total Population'), digits = 0)
   
@@ -323,38 +334,84 @@ DT::renderDataTable({
 
 ```
 
-AP Top 25 Over Time
+### Team Stat Explorer
+
+```{r}
+DT::renderDataTable({
+  
+  DT::datatable(
+    data = ds %>% 
+      dplyr::select(c(logo, display_name, mascot, conference, w_l, adj_em)) %>%
+      mutate(
+        logo = paste0("<img src='", logo, "' width='50' height='50'>")
+      ) %>%
+      rename(
+        Logo = logo,
+        Team = display_name,
+        Mascot = mascot,
+        Conference = conference,
+        Record = w_l,
+        `Kenpom Adj. EM` = adj_em
+      ),
+    rownames = FALSE, options = list(scrollY = 600, pageLength = 50, dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
+    extensions = 'Buttons',
+    escape = FALSE
+  ) 
+})
+
+```
+
+AP Top 10 Over Time
 ================================
 
-### AP Top 25 Over Time
+### AP Top 10 Over Time
 
 ```{r}
 
+ds_ap <- read_csv("2021_ap25.csv") %>%
+  pivot_longer(cols = !c(School, Conf), names_to = "Week") %>%
+  mutate(
+    value = as.numeric(value),
+    Week = as.numeric(Week)
+  ) %>%
+  rename(team = School)
 
+ds_teams <- hoopR::espn_mbb_teams()
 
-tc %>%
-  filter(file_year %in% c(2015, 2018, 2021)) %>%
-ggplot(., aes(x = file_year, y = rank, color = ct_cat)) +
-    geom_line(size = 2) +
-    geom_label(aes(label = paste0(ct_cat, "\n(", n, ")")),
-               color = "black",
-               family = "Courier") +
-    theme_ojo() +
+ds_ap <- merge(ds_ap, ds_teams, by = "team")
+
+ds_ap_10 <- ds_ap %>%
+  mutate(
+    value = if_else(value > 10 | is.na(value), 11, value),
+    short_name = str_replace(short_name, "State", "St."),
+    team = as.factor(team)
+  ) 
+
+p_ap25 <- ds_ap_10 %>%
+ggplot(., aes(x = Week, y = value, color = team, 
+              text = paste0("Team: ", team, "<br>",
+                            "Week: ", Week, "<br>",
+                            "Rank: ", value)
+              )) +
+    geom_line(aes(group = team), size = 2, alpha = 0.3) +
+    geom_point(size = 6) +
+#    geom_image(aes(image = logo)) + # Not implemented in plotly :(
+    geom_text(aes(label = short_name, text = ""), color = "black", nudge_y = 0.3) +
+    geom_text(aes(label = paste0("#", value), text = ""), color = "white") +
+  theme_clean() +
     theme(legend.position = "none") +
-    coord_cartesian(ylim=c(10, 1)) +
+    coord_cartesian(ylim = c(10, 1)) +
     scale_y_reverse(breaks = 1:10) +
-    scale_x_continuous(breaks = c(2015, 2018, 2021),
-                       limits = c(2013.5, 2022.5),
-                       position = "top") +
-    scale_color_viridis_d(option = "plasma") +
-    labs(title = plot_title,
-         subtitle = "Oklahoma County, 2015, 2018, and 2021 YTD",
-         x = NULL,
-         y = NULL) +
+    scale_color_manual(breaks = ncaa_scale$team, values = ncaa_scale$color) +
+    scale_x_continuous(breaks = 1:17) +
+    labs(y = NULL) +
     theme(axis.ticks = element_blank(),
           panel.grid = element_blank(),
           panel.border = element_blank())
 
+
+ggplotly(p_ap25, tooltip = "text")
 
 ```
 
