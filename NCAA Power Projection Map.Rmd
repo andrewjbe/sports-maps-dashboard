@@ -26,6 +26,7 @@ library(bslib)
 library(bsplus)
 library(tidycensus)
 library(DT)
+library(hoopR)
 
 # setwd("C:/Users/Andrew/Documents/GitHub/sports-maps-dashboard/")
 
@@ -38,6 +39,7 @@ library(DT)
 #   dplyr::select(team, color, color2)
 # 
 # write_csv(ncaa_scale, "ncaa_scale.csv")
+
 ncaa_scale <- read_csv("ncaa_scale.csv")
 
 # ds <- read_csv("schools_cities_coords_logos_fixed.csv")
@@ -53,7 +55,6 @@ ncaa_scale <- read_csv("ncaa_scale.csv")
 # #          conference == "Big 12 Conference")
 # 
 # # Power projection idea ================================================
-# 
 # 
 # ds_kp <- hoopR::kp_pomeroy_ratings(min_year = 2021, max_year = 2021)
 # 
@@ -323,7 +324,7 @@ DT::renderDataTable({
         'Total Territory (sq. mi.)' = sum_total,
         'Total Population' = total_pop
       ),
-    rownames = FALSE, options = list(scrollY = 600, pageLength = 100, dom = 'Bfrtip',
+    rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip',
     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
     extensions = 'Buttons',
     escape = FALSE
@@ -353,7 +354,7 @@ DT::renderDataTable({
         Record = w_l,
         `Kenpom Adj. EM` = adj_em
       ),
-    rownames = FALSE, options = list(scrollY = 600, pageLength = 50, dom = 'Bfrtip',
+    rownames = FALSE, options = list(scrollY = 550, pageLength = 50, dom = 'Bfrtip',
     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
     extensions = 'Buttons',
     escape = FALSE
@@ -369,24 +370,28 @@ AP Top 10 Over Time
 
 ```{r}
 
-ds_ap <- read_csv("2021_ap25.csv") %>%
-  pivot_longer(cols = !c(School, Conf), names_to = "Week") %>%
-  mutate(
-    value = as.numeric(value),
-    Week = as.numeric(Week)
-  ) %>%
-  rename(team = School)
+# ds_ap <- read_csv("2021_ap25.csv") %>%
+#   pivot_longer(cols = !c(School, Conf), names_to = "Week") %>%
+#   mutate(
+#     value = as.numeric(value),
+#     Week = as.numeric(Week)
+#   ) %>%
+#   rename(team = School)
+# 
+# ds_teams <- hoopR::espn_mbb_teams()
+# 
+# ds_ap <- merge(ds_ap, ds_teams, by = "team")
+# 
+# ds_ap_10 <- ds_ap %>%
+#   mutate(
+#     value = if_else(value > 10 | is.na(value), 11, value),
+#     short_name = str_replace(short_name, "State", "St."),
+#     team = as.factor(team)
+#   ) 
+# 
+# write_csv(ds_ap_10, "ds_ap_10.csv")
 
-ds_teams <- hoopR::espn_mbb_teams()
-
-ds_ap <- merge(ds_ap, ds_teams, by = "team")
-
-ds_ap_10 <- ds_ap %>%
-  mutate(
-    value = if_else(value > 10 | is.na(value), 11, value),
-    short_name = str_replace(short_name, "State", "St."),
-    team = as.factor(team)
-  ) 
+ds_ap_10 <- read_csv("ds_ap_10.csv")
 
 p_ap25 <- ds_ap_10 %>%
 ggplot(., aes(x = Week, y = value, color = team, 
