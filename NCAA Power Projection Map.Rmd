@@ -36,89 +36,88 @@ library(hoopR)
 #     color2 = if_else(is.na(alternate_color), "#000000", paste0("#", alternate_color))
 #   ) %>%
 #   dplyr::select(team, color, color2)
-# 
+#
 # write_csv(ncaa_scale, "ncaa_scale.csv")
-
 ncaa_scale <- read_csv("ncaa_scale.csv")
 
-# ds <- read_csv("schools_cities_coords_logos_fixed.csv")
-# 
-# ds <- ds %>%
-#   dplyr::select(!c(color, alternate_color))
-# 
-# ds <- merge(ds, ncaa_scale, by = "team")
-# 
+ds <- read_csv("schools_cities_coords_logos_fixed.csv")
+
+ds <- merge(ds, ncaa_scale, by = "team")
+
 # # Need to clean data by hand and fix NAs, this is a stopgap
 # # ds <- ds %>%
 # #   filter(!is.na(lng),
 # #          conference == "Big 12 Conference")
-# 
+ 
 # # Power projection idea ================================================
-# 
-# ds_kp <- hoopR::kp_pomeroy_ratings(min_year = 2021, max_year = 2021)
-# 
-# ds <- left_join(ds, ds_kp) %>%
-#   filter(!is.na(lng))
+ 
+ds_kp <- hoopR::kp_pomeroy_ratings(min_year = 2021, max_year = 2021) %>%
+  mutate(
+    team = str_replace(team, "St.", "State")
+  )
 
-ds <- read_csv("dataset.csv")
+ds <- left_join(ds, ds_kp) %>% 
+  filter(!is.na(lng))
 
-# pnts_sf <- st_as_sf(ds, coords = c("lng", "lat"))
-# st_crs(pnts_sf) <- 4326
-# 
-# counties <- counties(cb = TRUE, resolution = "20m")
-# st_crs(counties) <- 4326
-# 
-# counties <- counties %>%
-#   mutate(
-#     n = row_number()
-#   )
-# 
-# closest_ <- list()
-# for (i in seq_len(nrow(counties))) {
-#   closest_[[i]] <- pnts_sf[which.max(
-#     (ds$adj_em - 10) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
-#     ), ]
-#   print(paste0(100 * i / nrow(counties), "%"))
-# }
-# closest_ <- rbindlist(closest_)
-# 
-# closest_ <- closest_ %>%
-#   dplyr::select(team, color, logo) %>%
-#   mutate(
-#     n = row_number()
-#   )
-# 
-# counties_ <- left_join(counties, closest_, by = "n")
-# 
-# var_list <- c("B00001_001")
-# counties_pop <- get_acs(geography = "county", variables = var_list, year = 2018)
-# 
-# counties_ <- merge(counties_, counties_pop, by = "GEOID")
-# 
-# counties_ <- counties_ %>%
-#   rename(
-#     population = estimate
-#   ) %>%
-#   dplyr::select(!variable)
-# 
-# # Removes Alaska
-# counties_ <- counties_ %>%
-#   filter(STATEFP != "02")
-# 
-# counties_grouped <- counties_ %>%
-#   group_by(team, logo, color) %>%
-#   summarise(
-#     n = n(),
-#     sum_land = sum(ALAND) * 0.000000386102,
-#     sum_water = sum(AWATER) * 0.000000386102,
-#     sum_total = sum_land + sum_water,
-#     total_pop = sum(population)
-#   ) %>%
-#   st_cast("MULTIPOLYGON")
-# 
+# ds <- read_csv("dataset.csv")
+
+pnts_sf <- st_as_sf(ds, coords = c("lng", "lat"))
+st_crs(pnts_sf) <- 4326
+
+counties <- counties(cb = TRUE, resolution = "20m")
+st_crs(counties) <- 4326
+
+counties <- counties %>%
+  mutate(
+    n = row_number()
+  )
+
+closest_ <- list()
+for (i in seq_len(nrow(counties))) {
+  closest_[[i]] <- pnts_sf[which.max(
+    (ds$adj_em - 10) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
+    ), ]
+  print(paste0(100 * i / nrow(counties), "%"))
+}
+closest_ <- rbindlist(closest_)
+
+closest_ <- closest_ %>%
+  dplyr::select(team, color, logo) %>%
+  mutate(
+    n = row_number()
+  )
+
+counties_ <- left_join(counties, closest_, by = "n")
+
+var_list <- c("B00001_001")
+counties_pop <- get_acs(geography = "county", variables = var_list, year = 2018)
+
+counties_ <- merge(counties_, counties_pop, by = "GEOID")
+
+counties_ <- counties_ %>%
+  rename(
+    population = estimate
+  ) %>%
+  dplyr::select(!variable)
+
+# Removes Alaska
+counties_ <- counties_ %>%
+  filter(STATEFP != "02")
+
+counties_grouped <- counties_ %>%
+  group_by(team, logo, color) %>%
+  summarise(
+    n = n(),
+    sum_land = sum(ALAND) * 0.000000386102,
+    sum_water = sum(AWATER) * 0.000000386102,
+    sum_total = sum_land + sum_water,
+    total_pop = sum(population)
+  ) %>%
+  st_cast("MULTIPOLYGON")
+
 # save(counties_grouped, file = "counties_grouped.RData")
 
-load("counties_grouped.RData")
+# load("counties_grouped.RData")
 
 # gg <- ggplot() + 
 #   geom_sf(data = counties_, size = 0.25, aes(fill = team, text = paste("Current Owner:", team))) +
@@ -166,7 +165,7 @@ leaflet() %>%
   addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~fill_team(team), fillOpacity = 0.8, label = ~team,
               highlightOptions = highlightOptions(color = 'white', weight = 1, 
                                                   bringToFront = FALSE)) %>%
-  addCircleMarkers(data = ds, label = ~team, stroke = F, fillOpacity = 0.8, color = ~color, radius = 5, 
+  addCircleMarkers(data = ds, label = ~team, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5, 
                    popup = paste0("<center><img src=", ds$logo, " width = '50' height = '50'></center>", 
                                   "<br><hr><b>", ds$display_name,
                                   "</b><br>", ds$conference,
