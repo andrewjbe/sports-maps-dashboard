@@ -28,6 +28,10 @@ library(bsplus)
 library(tidycensus)
 library(DT)
 library(hoopR)
+library(lwgeom)
+
+# Sys.setenv(KP_USER = "YOUR EMAIL HERE")
+# Sys.setenv(KP_PW = "YOUR PW HERE")
 
 # ncaa_scale <- espn_mbb_teams() %>%
 #   filter(!is.na(color)) %>%
@@ -51,17 +55,22 @@ ds <- merge(ds, ncaa_scale, by = "team")
  
 # # Power projection idea ================================================
  
-ds_kp <- hoopR::kp_pomeroy_ratings(min_year = 2021, max_year = 2021) %>%
-  mutate(
-    team = str_replace(team, "St.", "State")
-  )
+# TO UPDATE: Uncomment chunk below and run, then knit / deploy
+ ds_kp <- hoopR::kp_pomeroy_ratings(min_year = 2021, max_year = 2021) %>%
+   mutate(
+     team = str_replace(team, "St.", "State")
+   )
 
-ds <- left_join(ds, ds_kp) %>% 
-  filter(!is.na(lng))
+ds <- left_join(ds, ds_kp)
+
+# write_csv(ds, "dataset.csv")
 
 # ds <- read_csv("dataset.csv")
 
-pnts_sf <- st_as_sf(ds, coords = c("lng", "lat"))
+ds_top <- ds %>%
+  slice_max(order_by = adj_em, n = 30)
+
+pnts_sf <- st_as_sf(ds_top, coords = c("lng", "lat"))
 st_crs(pnts_sf) <- 4326
 
 counties <- counties(cb = TRUE, resolution = "20m")
@@ -75,7 +84,7 @@ counties <- counties %>%
 closest_ <- list()
 for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
-    (ds$adj_em - 10) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
+    (ds_top$adj_em) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
     ), ]
   print(paste0(100 * i / nrow(counties), "%"))
 }
@@ -89,8 +98,11 @@ closest_ <- closest_ %>%
 
 counties_ <- left_join(counties, closest_, by = "n")
 
-var_list <- c("B00001_001")
-counties_pop <- get_acs(geography = "county", variables = var_list, year = 2018)
+# var_list <- c("B00001_001")
+# counties_pop <- get_acs(geography = "county", variables = var_list, year = 2018)
+# write_csv(counties_pop, "counties_pop.csv")
+
+counties_pop <- read_csv("counties_pop.csv")
 
 counties_ <- merge(counties_, counties_pop, by = "GEOID")
 
@@ -193,7 +205,7 @@ leaflet() %>%
   
 ```
 
-> Each county is "controlled" by the school with the highest "power projection" score relative to that county. This score is equal to schools' Kenpom Adj. Efficiency Margin (minimum +10) multiplied by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach". Data source: [Kenpom.com](https://kenpom.com/)
+> Each county is "controlled" by the school with the highest "power projection" score relative to that county. This score is equal to schools' Kenpom Adj. Efficiency Margin multiplied by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach" (to keep things from being too crowded, only the 30 best teams in the county by Adj. EM can own land). Data source: [Kenpom.com](https://kenpom.com/)
 
 ## Row
 
@@ -292,16 +304,15 @@ renderValueBox({
 })
 ```
 
-Power Projection Stats 
+Stat Explorer 
 =====================================
 
-Row {.tabset}
+Row 
 --------------
 
-### Power Projection Stat Explorer
+### Power Projection Domain Stats
 
 ```{r}
-DT::renderDataTable({
   
   DT::datatable(
     data = counties_grouped %>% 
@@ -329,37 +340,38 @@ DT::renderDataTable({
   ) %>%
   formatRound(c('Total Land Area (sq. mi.)', 'Total Water Area (sq. mi.)', 'Total Territory (sq. mi.)', 'Total Population'), digits = 0)
   
-})
 
 ```
 
-### Team Stat Explorer
+<!-- ### Team Stats -->
 
-```{r}
-DT::renderDataTable({
-  
-  DT::datatable(
-    data = ds %>% 
-      dplyr::select(c(logo, display_name, mascot, conference, w_l, adj_em)) %>%
-      mutate(
-        logo = paste0("<img src='", logo, "' width='50' height='50'>")
-      ) %>%
-      rename(
-        Logo = logo,
-        Team = display_name,
-        Mascot = mascot,
-        Conference = conference,
-        Record = w_l,
-        `Kenpom Adj. EM` = adj_em
-      ),
-    rownames = FALSE, options = list(scrollY = 550, pageLength = 50, dom = 'Bfrtip',
-    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
-    extensions = 'Buttons',
-    escape = FALSE
-  ) 
-})
+<!-- ```{r} -->
 
-```
+<!--   DT::datatable( -->
+<!--     data = ds %>%  -->
+<!--       dplyr::select(c(logo, display_name, mascot, conference, w_l, adj_em)) %>% -->
+<!--       mutate( -->
+<!--         logo = paste0("<img src='", logo, "' width='50' height='50'>"), -->
+<!--         # wins = gsub( "(.*)-(.*)", "\\1",  w_l), -->
+<!--         # losses = gsub( "(.*)-(.*)", "\\2",  w_l), -->
+<!--         conference = str_replace(conference, "\\s*\\[[^\\)]+\\]", "") -->
+<!--       ) %>% -->
+<!--       rename( -->
+<!--         Logo = logo, -->
+<!--         Team = display_name, -->
+<!--         Mascot = mascot, -->
+<!--         Conference = conference, -->
+<!--         Record = w_l, -->
+<!--         `Kenpom Adj. EM` = adj_em -->
+<!--       ), -->
+<!--     rownames = FALSE, options = list(scrollY = 550, pageLength = 50, dom = 'Bfrtip', -->
+<!--     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')),  -->
+<!--     extensions = 'Buttons', -->
+<!--     escape = FALSE -->
+<!--   ) %>% DT::formatString("Record") -->
+
+
+<!-- ``` -->
 
 AP Top 10 Over Time
 ================================
