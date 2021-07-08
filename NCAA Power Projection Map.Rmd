@@ -86,7 +86,7 @@ for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
     (ds_top$adj_em) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
     ), ]
-  print(paste0(100 * i / nrow(counties), "%"))
+  print(paste0(round(100 * i / nrow(counties), 2), "%"))
 }
 closest_ <- rbindlist(closest_)
 
