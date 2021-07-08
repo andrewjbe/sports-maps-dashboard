@@ -373,75 +373,60 @@ Row
 
 <!-- ``` -->
 
-AP Top 10 Over Time
-================================
-
-### AP Top 10 Over Time
-
-```{r}
-
-# ds_ap <- read_csv("2021_ap25.csv") %>%
-#   pivot_longer(cols = !c(School, Conf), names_to = "Week") %>%
-#   mutate(
-#     value = as.numeric(value),
-#     Week = as.numeric(Week)
-#   ) %>%
-#   rename(team = School)
-# 
-# ds_teams <- hoopR::espn_mbb_teams()
-# 
-# ds_ap <- merge(ds_ap, ds_teams, by = "team")
-# 
-# ds_ap_10 <- ds_ap %>%
-#   mutate(
-#     value = if_else(value > 10 | is.na(value), 11, value),
-#     short_name = str_replace(short_name, "State", "St."),
-#     team = as.factor(team)
-#   ) 
-# 
-# write_csv(ds_ap_10, "ds_ap_10.csv")
-
-ds_ap_10 <- read_csv("ds_ap_10.csv")
-
-p_ap25 <- ds_ap_10 %>%
-ggplot(., aes(x = Week, y = value, color = team, 
-              text = paste0("Team: ", team, "<br>",
-                            "Week: ", Week, "<br>",
-                            "Rank: ", value)
-              )) +
-    geom_line(aes(group = team), size = 2, alpha = 0.3) +
-    geom_point(size = 6) +
-#    geom_image(aes(image = logo)) + # Not implemented in plotly :(
-    geom_text(aes(label = short_name, text = ""), color = "black", nudge_y = 0.3) +
-    geom_text(aes(label = paste0("#", value), text = ""), color = "white") +
-  theme_clean() +
-    theme(legend.position = "none") +
-    coord_cartesian(ylim = c(10, 1)) +
-    scale_y_reverse(breaks = 1:10) +
-    scale_color_manual(breaks = ncaa_scale$team, values = ncaa_scale$color) +
-    scale_x_continuous(breaks = 1:17) +
-    labs(y = NULL) +
-    theme(axis.ticks = element_blank(),
-          panel.grid = element_blank(),
-          panel.border = element_blank())
-
-
-ggplotly(p_ap25, tooltip = "text")
-
-```
-
-
-
-<!-- Closest Undefeated Team -->
+<!-- AP Top 10 Over Time -->
 <!-- ================================ -->
+
+<!-- ### AP Top 10 Over Time -->
 
 <!-- ```{r} -->
 
+<!-- # ds_ap <- read_csv("2021_ap25.csv") %>% -->
+<!-- #   pivot_longer(cols = !c(School, Conf), names_to = "Week") %>% -->
+<!-- #   mutate( -->
+<!-- #     value = as.numeric(value), -->
+<!-- #     Week = as.numeric(Week) -->
+<!-- #   ) %>% -->
+<!-- #   rename(team = School) -->
+<!-- #  -->
+<!-- # ds_teams <- hoopR::espn_mbb_teams() -->
+<!-- #  -->
+<!-- # ds_ap <- merge(ds_ap, ds_teams, by = "team") -->
+<!-- #  -->
+<!-- # ds_ap_10 <- ds_ap %>% -->
+<!-- #   mutate( -->
+<!-- #     value = if_else(value > 10 | is.na(value), 11, value), -->
+<!-- #     short_name = str_replace(short_name, "State", "St."), -->
+<!-- #     team = as.factor(team) -->
+<!-- #   )  -->
+<!-- #  -->
+<!-- # write_csv(ds_ap_10, "ds_ap_10.csv") -->
+
+<!-- ds_ap_10 <- read_csv("ds_ap_10.csv") -->
+
+<!-- p_ap25 <- ds_ap_10 %>% -->
+<!-- ggplot(., aes(x = Week, y = value, color = team,  -->
+<!--               text = paste0("Team: ", team, "<br>", -->
+<!--                             "Week: ", Week, "<br>", -->
+<!--                             "Rank: ", value) -->
+<!--               )) + -->
+<!--     geom_line(aes(group = team), size = 2, alpha = 0.3) + -->
+<!--     geom_point(size = 6) + -->
+<!-- #    geom_image(aes(image = logo)) + # Not implemented in plotly :( -->
+<!--     geom_text(aes(label = short_name, text = ""), color = "black", nudge_y = 0.3) + -->
+<!--     geom_text(aes(label = paste0("#", value), text = ""), color = "white") + -->
+<!--   theme_clean() + -->
+<!--     theme(legend.position = "none") + -->
+<!--     coord_cartesian(ylim = c(10, 1)) + -->
+<!--     scale_y_reverse(breaks = 1:10) + -->
+<!--     scale_color_manual(breaks = ncaa_scale$team, values = ncaa_scale$color) + -->
+<!--     scale_x_continuous(breaks = 1:17) + -->
+<!--     labs(y = NULL) + -->
+<!--     theme(axis.ticks = element_blank(), -->
+<!--           panel.grid = element_blank(), -->
+<!--           panel.border = element_blank()) -->
+
+
+<!-- ggplotly(p_ap25, tooltip = "text") -->
+
 <!-- ``` -->
 
-<!-- Imperialism Map -->
-<!-- ================================ -->
-
-<!-- ```{r} -->
-
-<!-- ``` -->
