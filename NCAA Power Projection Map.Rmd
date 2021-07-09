@@ -42,11 +42,15 @@ library(lwgeom)
 #   dplyr::select(team, color, color2)
 #
 # write_csv(ncaa_scale, "ncaa_scale.csv")
-ncaa_scale <- read_csv("ncaa_scale.csv")
+ncaa_scale <- read_csv("ncaa_scale.csv") %>%
+  mutate(
+    team = str_replace(team, "UCONN", "Connecticut")
+  )
 
 ds <- read_csv("schools_cities_coords_logos_fixed.csv")
 
-ds <- merge(ds, ncaa_scale, by = "team")
+ds <- left_join(ds, ncaa_scale, by = "team") %>%
+  mutate(team = str_replace(team, "State", "St."))
 
 # # Need to clean data by hand and fix NAs, this is a stopgap
 # # ds <- ds %>%
@@ -56,10 +60,8 @@ ds <- merge(ds, ncaa_scale, by = "team")
 # # Power projection idea ================================================
  
 # TO UPDATE: Uncomment chunk below and run, then knit / deploy
- ds_kp <- hoopR::kp_pomeroy_ratings(min_year = 2021, max_year = 2021) %>%
-   mutate(
-     team = str_replace(team, "St.", "State")
-   )
+ ds_kp <- hoopR::kp_pomeroy_ratings(min_year = year(today()), max_year = year(today())) %>%
+  mutate(team = if_else(team == "N.C. Statete", "N.C. State", team))
 
 ds <- left_join(ds, ds_kp)
 
@@ -199,9 +201,9 @@ leaflet() %>%
              icon = logoIcons) %>%
   addTiles() %>%
   setMaxBounds(lng1 = -130,
-               lat1 = 25,
+               lat1 = 20,
                lng2 = -65,
-               lat2 = 50)
+               lat2 = 55)
   
 ```
 
