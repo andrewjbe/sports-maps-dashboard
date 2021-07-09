@@ -171,7 +171,7 @@ fill_team <- colorFactor(counties_grouped$color, counties_grouped$team)
 
 logoIcons <- icons(
   iconUrl = counties_grouped$logo,
-  iconWidth = 20, iconHeight = 20
+  iconWidth = 25, iconHeight = 25
 )
 
 leaflet() %>%
@@ -179,8 +179,8 @@ leaflet() %>%
   addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~fill_team(team), fillOpacity = 0.8, label = ~team,
               highlightOptions = highlightOptions(color = 'white', weight = 1, 
                                                   bringToFront = FALSE)) %>%
-  addCircleMarkers(data = ds, label = ~team, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5, 
-                   popup = paste0("<center><img src=", ds$logo, " width = '50' height = '50'></center>", 
+  addCircleMarkers(data = ds, label = ~team, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
+                   popup = paste0("<center><img src=", ds$logo, " width = '50' height = '50'></center>",
                                   "<br><hr><b>", ds$display_name,
                                   "</b><br>", ds$conference,
                                   "<br>W/L Rate: ", ds$w_l,
@@ -189,7 +189,7 @@ leaflet() %>%
                                   "<br>Adj. D: ", ds$adj_d, " (Rank: ", ds$adj_d_rk, ")"
                                   )) %>%
   addCircleMarkers(data = st_centroid(counties_grouped), label = "", 
-                   stroke = F, color = "white", fill = "white", fillOpacity = 1) %>%
+                   stroke = F, color = "white", fill = "white", fillOpacity = 1, radius = 15) %>%
   addMarkers(data = st_centroid(counties_grouped), label = ~team, popup = paste0(
     "<center><b>", counties_grouped$team, "'s</b> Domain<br></center>",
     "<hr>",
@@ -207,7 +207,7 @@ leaflet() %>%
   
 ```
 
-> Each county is "controlled" by the school with the highest "power projection" score relative to that county. This score is equal to schools' Kenpom Adj. Efficiency Margin multiplied by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach" (to keep things from being too crowded, only the 30 best teams in the county by Adj. EM can own land). Data source: [Kenpom.com](https://kenpom.com/)
+> Each county is "controlled" by the school with the highest "power projection" score relative to that county. This score is equal to schools' Kenpom Adj. Efficiency Margin divided by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach" (to keep things from being too crowded, only the 30 best teams in the county by Adj. EM can own land). Data source: [Kenpom.com](https://kenpom.com/)
 
 ## Row
 

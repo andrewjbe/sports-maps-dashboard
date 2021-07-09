@@ -1,0 +1,76 @@
+---
+title: "NCAA Football Dashboard"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(cfbfastR)
+library(tidyverse)
+library(shiny)
+library(lubridate)
+
+ds_conf <- cfbfastR::cfbd_conferences()
+
+```
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+
+# Conference Filter
+selectInput(
+  inputId = "conference",
+  label = "Conference",
+  choices = ds_conf$name
+)
+
+shiny::dateInput(
+  inputId = "week",
+  label = "Week",
+  value = week(today()),
+  min = ymd("2021/07/01"),
+  format = "dd-mm-yyyy",
+  startview = "month"
+)
+
+# 
+
+ds_schedule.react <- reactive({
+  
+  cfbd_game_media(2021, week = week(dmy(input$week))) %>%
+  mutate(
+    start_time = ymd_hms(start_time)
+  )
+
+  })
+
+ds_conf_list.react <- reactive({
+  
+  sort(rbind(ds_schedule.react() %>% filter(!is.na(home_conference)) %>% pull(var = home_conference), 
+                  ds_schedule.react() %>% filter(!is.na(away_conference)) %>% pull(var = away_conference)))
+  
+})
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+
+```
+
+### Chart C
+
+```{r}
+
+```
+
