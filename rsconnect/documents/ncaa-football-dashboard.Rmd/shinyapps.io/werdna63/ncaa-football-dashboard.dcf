@@ -1,0 +1,13 @@
+name: ncaa-football-dashboard
+title: ncaa-football-dashboard
+username:
+account: werdna63
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4371214
+bundleId: 4805489
+url: https://werdna63.shinyapps.io/ncaa-football-dashboard/
+when: 1625895382.82474
+lastSyncTime: 1625895382.82474
+asMultiple: FALSE
+asStatic: FALSE

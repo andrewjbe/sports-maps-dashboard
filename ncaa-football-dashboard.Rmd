@@ -1,76 +1,297 @@
 ---
-title: "NCAA Football Dashboard"
+title: "NCAA Football Power Projection Map"
 runtime: shiny
 output: 
   flexdashboard::flex_dashboard:
-    orientation: columns
+    orientation: rows
     vertical_layout: fill
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, cache=TRUE}
 library(flexdashboard)
 library(cfbfastR)
 library(tidyverse)
-library(shiny)
+library(raster)
+library(data.table)
+library(ggimage)
 library(lubridate)
+library(ggthemes)
+library(sf)
+library(tigris)
+library(leaflet)
+library(RCurl)
+library(png)
+library(plotly)
+library(bslib)
+library(bsplus)
+library(DT)
+library(lwgeom)
 
-ds_conf <- cfbfastR::cfbd_conferences()
+# Sys.setenv(CFBD_API_KEY="YOUR_KEY_HERE")
 
-```
+ds_teams_ <- cfbd_team_info(year = year(today())) %>%
+  unnest(cols = c(logos)) %>%
+  distinct(team_id, .keep_all = TRUE)
 
-Inputs {.sidebar}
------------------------------------------------------------------------
+# Make this reactive? 
+ds_rank <- cfbd_rankings(year = 2020) %>%
+  filter(poll == "AP Top 25",
+         !is.na(points)
+  ) %>%
+  filter(week == max(week)) %>%
+  dplyr::select(c(week, poll, season_type, rank, school, first_place_votes, points))
 
-```{r}
+ds_teams <- ds_teams_ %>%
+  left_join(., ds_rank)
 
-# Conference Filter
-selectInput(
-  inputId = "conference",
-  label = "Conference",
-  choices = ds_conf$name
-)
+pnts_sf <- st_as_sf(ds_teams, coords = c("longitude", "latitude"))
+st_crs(pnts_sf) <- 4326
 
-shiny::dateInput(
-  inputId = "week",
-  label = "Week",
-  value = week(today()),
-  min = ymd("2021/07/01"),
-  format = "dd-mm-yyyy",
-  startview = "month"
-)
+counties <- counties(cb = TRUE, resolution = "20m")
+st_crs(counties) <- 4326
 
-# 
-
-ds_schedule.react <- reactive({
-  
-  cfbd_game_media(2021, week = week(dmy(input$week))) %>%
+counties <- counties %>%
   mutate(
-    start_time = ymd_hms(start_time)
+    n = row_number()
   )
 
-  })
+closest_ <- list()
+for (i in seq_len(nrow(counties))) {
+  closest_[[i]] <- pnts_sf[which.max(
+    (ds_teams$points) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
+    ), ]
+  print(paste0(round(100 * i / nrow(counties), 2), "%"))
+}
+closest_ <- rbindlist(closest_)
 
-ds_conf_list.react <- reactive({
-  
-  sort(rbind(ds_schedule.react() %>% filter(!is.na(home_conference)) %>% pull(var = home_conference), 
-                  ds_schedule.react() %>% filter(!is.na(away_conference)) %>% pull(var = away_conference)))
-  
-})
+closest_ <- closest_ %>%
+  dplyr::select(school, color, logos) %>%
+  mutate(
+    n = row_number()
+  )
+
+counties_ <- left_join(counties, closest_, by = "n")
+
+# var_list <- c("B00001_001")
+# counties_pop <- get_acs(geography = "county", variables = var_list, year = 2018)
+# write_csv(counties_pop, "counties_pop.csv")
+
+counties_pop <- read_csv("counties_pop.csv")
+
+counties_ <- merge(counties_, counties_pop, by = "GEOID")
+
+counties_ <- counties_ %>%
+  rename(
+    population = estimate
+  ) %>%
+  dplyr::select(!variable)
+
+# Removes Alaska
+# counties_ <- counties_ %>%
+#   filter(STATEFP != "02",
+#          STATEFP != "72")
+
+counties_grouped <- counties_ %>%
+  group_by(school, logos, color) %>%
+  summarise(
+    n = n(),
+    sum_land = sum(ALAND) * 0.000000386102,
+    sum_water = sum(AWATER) * 0.000000386102,
+    sum_total = sum_land + sum_water,
+    total_pop = sum(population)
+  ) %>%
+  st_cast("MULTIPOLYGON")
+
+counties_grouped <- counties_grouped %>%
+  left_join(., ds_teams)
 
 ```
 
-Column {data-width=350}
+Power Projection Map
+=====================================
+
+Row 
 -----------------------------------------------------------------------
 
-### Chart B
+### Power Projection Map
 
 ```{r}
 
+fill_team <- colorFactor(ds_teams$color, ds_teams$school)
+
+logoIcons <- icons(
+  iconUrl = counties_grouped$logos,
+  iconWidth = 20, iconHeight = 20
+)
+
+leaflet() %>%
+  setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
+  addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~fill_team(school), fillOpacity = 0.8, label = ~school,
+              highlightOptions = highlightOptions(color = 'white', weight = 1,
+                                                  bringToFront = FALSE)) %>%
+  addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
+                   popup = paste0("<center><img src=", ds_teams$logos, " width = '50' height = '50'>",
+                                  "<br><hr><b>", ds_teams$school, "</center>",
+                                  "</b><br>", ds_teams$conference,
+                                  "<br>Mascot: ", ds_teams$mascot
+                                  )) %>%
+  addCircleMarkers(data = st_centroid(counties_grouped), label = "",
+                   stroke = F, color = "white", fill = "white", fillOpacity = 1, radius = 12) %>%
+  addMarkers(data = st_centroid(counties_grouped), label = ~school, popup = paste0(
+    "<center><b>", counties_grouped$school, "'s</b> Domain<br></center>",
+    "<hr>",
+    "No. of AP points: ", format(counties_grouped$points, nsmall = 1, big.mark = ","), "<br>",
+    "Current AP Poll Rank: ", format(counties_grouped$rank, nsmall = 1, big.mark = ","), "<br>",
+    "<hr>",
+    "Total land area: ", format(round(counties_grouped$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+    "Total water area: ", format(round(counties_grouped$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+    "No. of Counties: ", format(counties_grouped$n, nsmall = 1, big.mark = ","), "<br>",
+    "Total Population: ", format(counties_grouped$total_pop, big.mark = ",")
+  ),
+             icon = logoIcons) %>%
+  addTiles() 
+  # setMaxBounds(lng1 = -130,
+  #              lat1 = 20,
+  #              lng2 = -65,
+  #              lat2 = 55)
+
 ```
 
-### Chart C
+> Each county is "controlled" by the team with the highest "power projection" score relative to that county. This score is equal to schools' total AP Poll votes (in the most recent poll) divided by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach". Data source: https://github.com/saiemgilani/cfbfastR-data
+
+Row
+-----------------------------------------------------------------------
+
+### Biggest Domain {.no-mobile}
 
 ```{r}
+top_domain <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school)
 
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school)
+    ),
+    color = ds_teams %>% filter(school == top_domain) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
+  )
+  
+})
 ```
 
+### Biggest Water Domain {.no-mobile}
+
+```{r}
+top_water <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = school)
+    ),
+    color = ds_teams %>% filter(school == top_water) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
+  )
+  
+})
+```
+
+### Biggest Land Domain {.no-mobile}
+
+```{r}
+top_land <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = school)
+    ),
+    color = ds_teams %>% filter(school == top_land) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
+  )
+  
+})
+```
+
+### Most Counties Controlled {.no-mobile}
+
+```{r}
+top_counties <- counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = school)
+    ),
+    color = ds_teams %>% filter(school == top_counties) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = n), 1), nsmall = 1, big.mark = ","), "counties")
+  )
+  
+})
+```
+
+### Largest Population {.no-mobile}
+
+```{r}
+top_pop <- counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = school)
+
+renderValueBox({
+
+  valueBox(
+    paste0(
+      counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = school)
+    ),
+    color = ds_teams %>% filter(school == top_pop) %>% pull(var = color)
+  ) %>% bs_embed_tooltip(
+    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = total_pop), 1), big.mark = ","), "people")
+  )
+
+})
+```
+
+Stat Explorer 
+=====================================
+
+Row 
+--------------
+
+### Power Projection Domain Stats
+
+```{r}
+  
+  DT::datatable(
+    data = counties_grouped %>% 
+      dplyr::select(c(logos, school, n, sum_land, sum_water, sum_total, total_pop)) %>%
+      st_drop_geometry() %>%
+      mutate(
+        sum_land = round(sum_land, 2),
+        sum_water = round(sum_water, 2),
+        sum_total = round(sum_total, 2),
+        total_pop = round(total_pop, 2),
+        logos = paste0("<img src='", logos, "' width='50' height='50'>")
+      ) %>%
+      rename(
+        Team = school,
+        'Counties Controlled' = n,
+        'Total Land Area (sq. mi.)' = sum_land,
+        'Total Water Area (sq. mi.)' = sum_water,
+        'Total Territory (sq. mi.)' = sum_total,
+        'Total Population' = total_pop
+      ),
+    rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
+    extensions = 'Buttons',
+    escape = FALSE
+  ) %>%
+  formatRound(c('Total Land Area (sq. mi.)', 'Total Water Area (sq. mi.)', 'Total Territory (sq. mi.)', 'Total Population'), digits = 0)
+  
+
+```
