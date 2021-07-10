@@ -34,12 +34,11 @@ ds_teams_ <- cfbd_team_info(year = year(today())) %>%
   unnest(cols = c(logos)) %>%
   distinct(team_id, .keep_all = TRUE)
 
-# Make this reactive? 
-ds_rank <- cfbd_rankings(year = 2020) %>%
+# Make this reactive?
+ds_rank <- cfbd_rankings(year = 2020, season_type = "postseason") %>%
   filter(poll == "AP Top 25",
-         !is.na(points)
-  ) %>%
-  filter(week == max(week)) %>%
+         !is.na(points),
+         week == max(week)) %>%
   dplyr::select(c(week, poll, season_type, rank, school, first_place_votes, points))
 
 ds_teams <- ds_teams_ %>%
@@ -122,7 +121,7 @@ fill_team <- colorFactor(ds_teams$color, ds_teams$school)
 
 logoIcons <- icons(
   iconUrl = counties_grouped$logos,
-  iconWidth = 20, iconHeight = 20
+  iconWidth = 30, iconHeight = 30
 )
 
 leaflet() %>%
@@ -137,7 +136,7 @@ leaflet() %>%
                                   "<br>Mascot: ", ds_teams$mascot
                                   )) %>%
   addCircleMarkers(data = st_centroid(counties_grouped), label = "",
-                   stroke = F, color = "white", fill = "white", fillOpacity = 1, radius = 12) %>%
+                   stroke = F, color = "white", fill = "white", fillOpacity = .8, radius = 18) %>%
   addMarkers(data = st_centroid(counties_grouped), label = ~school, popup = paste0(
     "<center><b>", counties_grouped$school, "'s</b> Domain<br></center>",
     "<hr>",
@@ -270,7 +269,7 @@ Row
   
   DT::datatable(
     data = counties_grouped %>% 
-      dplyr::select(c(logos, school, n, sum_land, sum_water, sum_total, total_pop)) %>%
+      dplyr::select(c(logos, school, n, sum_land, sum_water, sum_total, total_pop, points, rank)) %>%
       st_drop_geometry() %>%
       mutate(
         sum_land = round(sum_land, 2),
@@ -285,7 +284,9 @@ Row
         'Total Land Area (sq. mi.)' = sum_land,
         'Total Water Area (sq. mi.)' = sum_water,
         'Total Territory (sq. mi.)' = sum_total,
-        'Total Population' = total_pop
+        'Total Population' = total_pop,
+        `Points in Latest AP Poll` = points,
+        `Rank in Latest AP Poll` = rank
       ),
     rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip',
     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
