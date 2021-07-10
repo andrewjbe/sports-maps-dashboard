@@ -5,4 +5,10 @@ A simple interactive dashboard for displaying maps related to NCAAM Basketball, 
 
 * Link to deployed NCAA Football map: https://werdna63.shinyapps.io/ncaa-football-dashboard/
 
+# Basketball Map
+
 The main map pulls data from ESPN and Kenpom.com to create a "power projection map". Each county is controlled by the most powerful nearby school (each school's strength in each county is calculated by dividing the team's Adj. EM score by the distance between the school and the closest county border), with only the top 30 teams able to own land in order to keep things simple.
+
+# Football Map
+
+The main map pulls data from the [CFBFastR Package](https://saiemgilani.github.io/cfbfastR/index.html) to create a "power projection map". Each county is controlled by the most powerful nearby school (each school's strength in each county is calculated by dividing the team's point total in the latest AP Poll by the distance between the school and the closest county border). Thus, teams who get more respect in the AP Poll will have stronger power projection scores and a greater "reach", while teams that slide in the polls will find their lands dwindling.
