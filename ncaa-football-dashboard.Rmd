@@ -28,6 +28,8 @@ library(bsplus)
 library(DT)
 library(lwgeom)
 
+options(scipen = 999)
+
 # Sys.setenv(CFBD_API_KEY="YOUR_KEY_HERE")
 
 ds_teams_ <- cfbd_team_info(year = year(today())) %>%
@@ -58,7 +60,7 @@ counties <- counties %>%
 closest_ <- list()
 for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
-    (ds_teams$points) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
+    (ds_teams$points) * (1 / sf::st_distance(pnts_sf, counties[i, ]))
     ), ]
   print(paste0(round(100 * i / nrow(counties), 2), "%"))
 }
@@ -87,9 +89,9 @@ counties_ <- counties_ %>%
   dplyr::select(!variable)
 
 # Removes Alaska
-# counties_ <- counties_ %>%
-#   filter(STATEFP != "02",
-#          STATEFP != "72")
+counties_ <- counties_ %>%
+  filter(STATEFP != "02",
+         STATEFP != "72")
 
 counties_grouped <- counties_ %>%
   group_by(school, logos, color) %>%
@@ -121,7 +123,7 @@ fill_team <- colorFactor(ds_teams$color, ds_teams$school)
 
 logoIcons <- icons(
   iconUrl = counties_grouped$logos,
-  iconWidth = 30, iconHeight = 30
+  iconWidth = 25, iconHeight = 25
 )
 
 leaflet() %>%
@@ -136,7 +138,7 @@ leaflet() %>%
                                   "<br>Mascot: ", ds_teams$mascot
                                   )) %>%
   addCircleMarkers(data = st_centroid(counties_grouped), label = "",
-                   stroke = F, color = "white", fill = "white", fillOpacity = .8, radius = 18) %>%
+                   stroke = F, color = "white", fill = "white", fillOpacity = 0.8, radius = 16) %>%
   addMarkers(data = st_centroid(counties_grouped), label = ~school, popup = paste0(
     "<center><b>", counties_grouped$school, "'s</b> Domain<br></center>",
     "<hr>",
@@ -147,8 +149,7 @@ leaflet() %>%
     "Total water area: ", format(round(counties_grouped$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
     "No. of Counties: ", format(counties_grouped$n, nsmall = 1, big.mark = ","), "<br>",
     "Total Population: ", format(counties_grouped$total_pop, big.mark = ",")
-  ),
-             icon = logoIcons) %>%
+  ), icon = logoIcons) %>%
   addTiles() 
   # setMaxBounds(lng1 = -130,
   #              lat1 = 20,

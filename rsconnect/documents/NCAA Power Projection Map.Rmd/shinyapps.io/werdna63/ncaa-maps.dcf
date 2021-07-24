@@ -5,9 +5,9 @@ account: werdna63
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 4185687
-bundleId: 4801521
+bundleId: 4851596
 url: https://werdna63.shinyapps.io/ncaa-maps/
-when: 1625792946.20164
-lastSyncTime: 1625792946.20164
+when: 1627104220.26349
+lastSyncTime: 1627104220.26349
 asMultiple: FALSE
 asStatic: FALSE

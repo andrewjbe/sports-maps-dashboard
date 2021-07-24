@@ -86,7 +86,7 @@ counties <- counties %>%
 closest_ <- list()
 for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
-    (ds_top$adj_em) * (1000 / sf::st_distance(pnts_sf, counties[i, ]))
+    (ds_top$adj_em) * (1 / sf::st_distance(pnts_sf, counties[i, ]))
     ), ]
   print(paste0(round(100 * i / nrow(counties), 2), "%"))
 }
@@ -114,9 +114,10 @@ counties_ <- counties_ %>%
   ) %>%
   dplyr::select(!variable)
 
-# Removes Alaska
+# Removes Alaska & Puerto Rico (no ncaa schools)
 counties_ <- counties_ %>%
-  filter(STATEFP != "02")
+  filter(STATEFP != "02",
+         STATEFP != "72")
 
 counties_grouped <- counties_ %>%
   group_by(team, logo, color) %>%
@@ -199,11 +200,11 @@ leaflet() %>%
     "Total Population: ", format(counties_grouped$total_pop, big.mark = ",")
   ),
              icon = logoIcons) %>%
-  addTiles() %>%
-  setMaxBounds(lng1 = -130,
-               lat1 = 20,
-               lng2 = -65,
-               lat2 = 55)
+  addTiles() # %>%
+  # setMaxBounds(lng1 = -130,
+  #              lat1 = 20,
+  #              lng2 = -65,
+  #              lat2 = 55)
   
 ```
 
