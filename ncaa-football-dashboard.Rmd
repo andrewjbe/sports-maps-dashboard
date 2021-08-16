@@ -30,14 +30,14 @@ library(lwgeom)
 
 options(scipen = 999)
 
-# Sys.setenv(CFBD_API_KEY="YOUR_KEY_HERE")
+# Sys.setenv(CFBD_API_KEY="")
 
 ds_teams_ <- cfbd_team_info(year = year(today())) %>%
   unnest(cols = c(logos)) %>%
   distinct(team_id, .keep_all = TRUE)
 
 # Make this reactive?
-ds_rank <- cfbd_rankings(year = 2020, season_type = "postseason") %>%
+ds_rank <- cfbd_rankings(year = year(today()), season_type = "regular") %>%
   filter(poll == "AP Top 25",
          !is.na(points),
          week == max(week)) %>%
@@ -137,9 +137,10 @@ leaflet() %>%
                                   "</b><br>", ds_teams$conference,
                                   "<br>Mascot: ", ds_teams$mascot
                                   )) %>%
-  addCircleMarkers(data = st_centroid(counties_grouped), label = "",
+  addCircleMarkers(data = counties_grouped, label = "", lat = ~latitude, lng = ~longitude,
                    stroke = F, color = "white", fill = "white", fillOpacity = 0.8, radius = 16) %>%
-  addMarkers(data = st_centroid(counties_grouped), label = ~school, popup = paste0(
+  addMarkers(data = counties_grouped, label = ~school,  lat = ~latitude, lng = ~longitude,
+             popup = paste0(
     "<center><b>", counties_grouped$school, "'s</b> Domain<br></center>",
     "<hr>",
     "No. of AP points: ", format(counties_grouped$points, nsmall = 1, big.mark = ","), "<br>",
