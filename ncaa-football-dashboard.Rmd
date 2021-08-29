@@ -696,7 +696,7 @@ Past Map Stat Explorer
 Row
 ------
 
-### Datatable
+### Past Map Stat Table
 
 ```{r}
 
@@ -735,4 +735,78 @@ renderDataTable({
 
 ```
 
+> This page will be blank until you generate a power projection map from a past season on the "Past Seasons Map Generator" tab.
 
+Old School Imperialism Map
+=======
+
+Row
+------
+
+### Old School Imperialism Map
+
+```{r}
+
+ds_results_ <- cfbd_game_info(year = year(today()))
+
+load("old_school_imperialism_base_map.Rdata")
+
+
+fill_team <- colorFactor(counties_grouped.os$color, counties_grouped.os$school)
+
+
+ds_results <- ds_results_ %>%
+  filter(!is.na(home_points)) %>%
+  mutate(
+    winner = if_else(home_points > away_points, home_team, away_team),
+    loser = if_else(home_points < away_points, home_team, away_team)
+  ) %>%
+  dplyr::select(winner, loser)
+
+for(i in (1:nrow(ds_results))){
+  
+  counties_grouped.os <- counties_grouped.os %>%
+    mutate(
+      school = if_else(school == ds_results$loser[i], ds_results$winner[i], school)
+    )
+
+  }
+
+
+logoIcons <- icons(
+  iconUrl = counties_grouped.os$logos,
+  iconWidth = 25, iconHeight = 25
+)
+
+leaflet() %>%
+  setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
+  addPolygons(data = counties_grouped.os, smoothFactor = 0.2, color = ~fill_team(school), fillOpacity = 0.9, label = ~school,
+              highlightOptions = highlightOptions(color = 'white', weight = 1,
+                                                  bringToFront = FALSE)) %>%
+  addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
+                   popup = paste0("<center><img src=", ds_teams$logos, " width = '50' height = '50'>",
+                                  "<br><hr><b>", ds_teams$school, "</center>",
+                                  "</b><br>", ds_teams$conference,
+                                  "<br>Mascot: ", ds_teams$mascot
+                   )) %>%
+  # addCircleMarkers(data = counties_grouped.os, label = "", lat = ~latitude, lng = ~longitude,
+  #                  stroke = F, color = "white", fill = "white", fillOpacity = 0.8, radius = 16) %>%
+  # addMarkers(data = counties_grouped.os, label = ~school,  lat = ~latitude, lng = ~longitude,
+  #            popup = paste0(
+  #              "<center><b>", counties_grouped.os$school, "'s</b> Domain<br></center>",
+  #              "<hr>",
+  #              "No. of AP points: ", format(counties_grouped.os$points, nsmall = 1, big.mark = ","), "<br>",
+  #              "Current AP Poll Rank: ", format(counties_grouped.os$rank, nsmall = 1, big.mark = ","), "<br>",
+  #              "<hr>",
+  #              "Total land area: ", format(round(counties_grouped.os$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+  #              "Total water area: ", format(round(counties_grouped.os$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+  #              "No. of Counties: ", format(counties_grouped.os$n, nsmall = 1, big.mark = ","), "<br>",
+  #              "Total Population: ", format(counties_grouped.os$total_pop, big.mark = ",")
+  #            ), icon = logoIcons) %>%
+  addTiles() 
+
+
+
+```
+
+> This is the old school-style of imperialism map. Each team starts with the counties closest to it, and then loses all their land to their opponents when defeated. You can hover over each territory to see its current owner (or tap if you're on mobile).
