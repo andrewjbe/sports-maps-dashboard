@@ -113,6 +113,24 @@ counties_grouped <- counties_ %>%
 counties_grouped <- counties_grouped %>%
   left_join(., ds_teams)
 
+  
+ds_teams <- pnts_sf %>% 
+  mutate(
+    intersection = as.integer(st_intersects(geometry, counties_grouped)), 
+    current_overlord = if_else(is.na(intersection), '', counties_grouped$school[intersection])
+    ) %>%
+  dplyr::select(current_overlord, school) %>%
+  left_join(ds_teams, ., by = "school")
+
+n_subjects <- ds_teams %>% group_by(current_overlord) %>% summarize(n_capitols = n(), capitol_list = paste(school, collapse = ", ")) %>%
+  rename(school = current_overlord)
+
+ds_teams <- ds_teams %>%
+  left_join(., n_subjects, by = "school")
+  
+counties_grouped <- counties_grouped %>%
+  left_join(., n_subjects, by = "school")
+  
 # List of available poll weeks / years
 
 # poll_list_ <- tibble()
@@ -157,7 +175,7 @@ poll_list <- poll_list %>%
 
 ```
 
-Power Projection Map 
+Power Projection Map {data-navmenu="Current Power Projection Map"}
 =====================================
 
 Row 
@@ -174,7 +192,7 @@ logoIcons <- icons(
 
 leaflet() %>%
   setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
-  addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~color, fillOpacity = 0.8, label = ~school,
+  addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~color, fillOpacity = 0.8, label = ~school, weight = 0.8,
               highlightOptions = highlightOptions(color = 'white', weight = 1,
                                                   bringToFront = FALSE)) %>%
   addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
@@ -248,20 +266,20 @@ renderValueBox({
 })
 ```
 
-### Biggest Land Domain {.no-mobile}
+### CFB Stadiums Controlled {.no-mobile}
 
 ```{r}
-top_land <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = school)
+top_subjects <- n_subjects %>% slice_max(order_by = n_capitols, n = 1, with_ties = FALSE)
 
 renderValueBox({
   
   valueBox(
     paste0(
-      counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = school)
+      top_subjects$school[1]
     ),
-    color = ds_teams %>% filter(school == top_land) %>% pull(var = color)
+    color = ds_teams %>% filter(school == top_subjects$school[1]) %>% pull(var = color)
   ) %>% bs_embed_tooltip(
-    title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
+    title = paste0(top_subjects$school[1], " currently has the most imperial subjects in their domain (", top_subjects$n_capitols[1], ")." )
   )
   
 })
@@ -305,7 +323,7 @@ renderValueBox({
 })
 ```
 
-Stat Explorer 
+Stat Explorer {data-navmenu="Current Power Projection Map"}
 =====================================
 
 Row 
@@ -317,7 +335,7 @@ Row
   
   DT::datatable(
     data = counties_grouped %>% 
-      dplyr::select(c(logos, school, n, sum_land, sum_water, sum_total, total_pop, points, rank)) %>%
+      dplyr::select(c(logos, school, n, sum_land, sum_water, sum_total, total_pop, points, rank, n_capitols, capitol_list)) %>%
       st_drop_geometry() %>%
       mutate(
         sum_land = round(sum_land, 2),
@@ -334,7 +352,9 @@ Row
         'Total Territory (sq. mi.)' = sum_total,
         'Total Population' = total_pop,
         `Points in Latest AP Poll` = points,
-        `Rank in Latest AP Poll` = rank
+        `Rank in Latest AP Poll` = rank,
+        `No. CFB Stadiums Controlled` = n_capitols,
+        `Stadiums Controlled` = capitol_list
       ),
     rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip',
     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')), 
@@ -347,7 +367,7 @@ Row
 ```
 
 
-Past Seasons Map Generator
+Past Seasons Map Generator {data-navmenu="Create Historical Power Projection Maps"}
 ==================================
 
 Inputs {.sidebar}
@@ -528,7 +548,7 @@ renderLeaflet({
   
 leaflet() %>%
   setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
-  addPolygons(data = counties_grouped.react(), smoothFactor = 0.2, 
+  addPolygons(data = counties_grouped.react(), smoothFactor = 0.2, weight = 0.8,
               color = ~counties_grouped.react()$color, fillOpacity = 0.8, 
               label = counties_grouped.react()$school,
               highlightOptions = highlightOptions(color = 'white', weight = 1,
@@ -571,7 +591,7 @@ leaflet() %>%
 
 ```
 
-> This is a power projection map like the one one the main page, showing the map for the season / week entered in the sidebar. Seasons prior to 2015 use Coaches Poll points, and seasons 2015 and onward use AP Poll points.
+> This is a power projection map like the one one the main page, showing the map for the season / week entered in the sidebar. Seasons prior to 2015 use Coaches Poll points, and seasons 2015 and onward use AP Poll points. The window above will be blank until you generate a map using the "Generate Map" button.
 
 
 Row
@@ -690,8 +710,8 @@ renderValueBox({
 
 
 
-Past Map Stat Explorer
-=======
+Past Map Stat Explorer {data-navmenu="Create Historical Power Projection Maps"}
+=====================================
 
 Row
 ------
@@ -737,7 +757,7 @@ renderDataTable({
 
 > This page will be blank until you generate a power projection map from a past season on the "Past Seasons Map Generator" tab.
 
-Old School Imperialism Map
+Old School Imperialism Map {data-navmenu="Old School Imperialism Map"}
 =======
 
 Row
@@ -779,7 +799,7 @@ logoIcons <- icons(
 
 leaflet() %>%
   setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
-  addPolygons(data = counties_grouped.os, smoothFactor = 0.2, color = ~fill_team(school), fillOpacity = 0.9, label = ~school,
+  addPolygons(data = counties_grouped.os, smoothFactor = 0.2, color = ~fill_team(school), fillOpacity = 0.9, label = ~school, weight = 0.8,
               highlightOptions = highlightOptions(color = 'white', weight = 1,
                                                   bringToFront = FALSE)) %>%
   addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
@@ -808,7 +828,7 @@ leaflet() %>%
 
 ```
 
-> This is the old school-style of imperialism map. Each team starts with the counties closest to it, and then loses all their land to their opponents when defeated. You can hover over each territory to see its current owner (or tap if you're on mobile).
+> This is the old school-style imperialism map. Each team starts with the counties closest to it, and then loses all their land to their opponents when defeated. You can hover over each territory to see its current owner (or tap if you're on mobile).
 
 Row
 -----------------------------------------------------------------------
@@ -816,13 +836,13 @@ Row
 ### Biggest Domain {.no-mobile}
 
 ```{r}
-top_domain.os <- counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school)
+top_domain.os <- counties_grouped.os %>% group_by(school) %>% summarize(sum_total = sum(sum(sum_total, na.rm = T))) %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school)
 
 renderValueBox({
   
   valueBox(
     paste0(
-      counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school)
+      top_domain.os
     ),
     color = ds_teams %>% filter(school == top_domain.os) %>% pull(var = color)
   ) %>% bs_embed_tooltip(
@@ -906,3 +926,51 @@ renderValueBox({
   )
 
 })
+
+
+```
+
+
+
+<!-- Past Map Stat Explorer {data-navmenu="Old School Imperialism Map"} -->
+<!-- ===================================== -->
+
+<!-- Row -->
+<!-- ------ -->
+
+<!-- ### Old School Map Stat Table -->
+
+<!-- ```{r} -->
+
+<!-- renderDataTable({ -->
+
+
+<!--   DT::datatable( -->
+<!--     data = counties_grouped.os %>%  -->
+<!--       dplyr::select(c(logos, school, n, sum_land, sum_water, sum_total, total_pop)) %>% -->
+<!--       st_drop_geometry() %>% -->
+<!--       mutate( -->
+<!--         sum_land = round(sum_land, 2), -->
+<!--         sum_water = round(sum_water, 2), -->
+<!--         sum_total = round(sum_total, 2), -->
+<!--         total_pop = round(total_pop, 2), -->
+<!--         logos = paste0("<img src='", logos, "' width='50' height='50'>") -->
+<!--       ) %>% -->
+<!--       rename( -->
+<!--         Team = school, -->
+<!--         'Counties Controlled' = n, -->
+<!--         'Total Land Area (sq. mi.)' = sum_land, -->
+<!--         'Total Water Area (sq. mi.)' = sum_water, -->
+<!--         'Total Territory (sq. mi.)' = sum_total, -->
+<!--         'Total Population' = total_pop -->
+<!--       ), -->
+<!--     rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip', -->
+<!--     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')),  -->
+<!--     extensions = 'Buttons', -->
+<!--     escape = FALSE -->
+<!--   ) %>% -->
+<!--   formatRound(c('Total Land Area (sq. mi.)', 'Total Water Area (sq. mi.)', 'Total Territory (sq. mi.)', 'Total Population'), digits = 0) -->
+
+<!-- }) -->
+
+<!-- ``` -->
