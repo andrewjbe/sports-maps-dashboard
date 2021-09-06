@@ -1,0 +1,290 @@
+---
+title: "CFB Interactive Imperialism Map"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(flexdashboard)
+library(leaflet)
+library(tidyverse)
+library(lubridate)
+library(sf)
+library(cfbfastR)
+library(DT)
+
+options(scipen = 999)
+
+# API key to retrieve data 
+# Sys.setenv(CFBD_API_KEY="")
+
+# Team info (colors / logo / mascot / etc.)
+ds_teams_ <- cfbd_team_info(year = year(today())) %>%
+  unnest(cols = c(logos)) %>%
+  distinct(team_id, .keep_all = TRUE) %>%
+  # Illinois' location is all screwed up for some reason, fixing some colors as well.
+  mutate(
+    latitude = if_else(school == "Illinois", 40.1020, latitude),
+    longitude = if_else(school == "Illinois", -88.2272, longitude),
+    color = if_else(school == "LSU", "#461D7C", color),
+    color = if_else(school == "Iowa", "#FCD116", color)
+  )
+
+ds_rank <- cfbd_rankings(year = year(today()), season_type = "regular") %>%
+  filter(poll == "AP Top 25",
+         !is.na(points),
+         week == max(week)) %>%
+  dplyr::select(c(week, poll, season_type, rank, school, first_place_votes, points))
+
+ds_teams <- ds_teams_ %>%
+  left_join(., ds_rank)
+
+ds_results_ <- cfbd_game_info(year = year(today()))
+
+load("old_school_imperialism_base_map.Rdata")
+
+counties_grouped.os <- counties_grouped.os %>%
+  # Some colors don't show up well w/ the logos  
+  mutate(
+    color = if_else(school == "LSU", "#461D7C", color),
+    color = if_else(school == "Iowa", "#FCD116", color),
+    color = if_else(school == "SMU", "#354CA1", color),
+    color = if_else(school == "TCU", "#ffffff", color),
+    color = if_else(school == "Michigan State", "#ffffff", color),
+    color = if_else(school == "UCLA", "#F2A900", color),
+    color = if_else(school == "USC", "#990000", color)
+  )
+
+fill_team <- colorFactor(counties_grouped.os$color, counties_grouped.os$school)
+
+ds_results <- ds_results_ %>%
+  filter(!is.na(home_points)) %>%
+  mutate(
+    winner = if_else(home_points > away_points, home_team, away_team),
+    # handles FCS upsets
+    winner = if_else(winner %in% ds_teams$school, winner, paste(winner, "(FCS)")),
+    loser = if_else(home_points < away_points, home_team, away_team)
+  ) %>%
+  dplyr::select(winner, loser) %>%
+  left_join(., ds_teams %>% dplyr::select(school, logos, color) %>% rename(winner = school), by = "winner") %>%
+  rename(winner_logos = logos, winner_color = color) %>%
+  # Handles FCS upsets
+  mutate(
+    winner_logos = if_else(is.na(winner_logos), "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.svg", winner_logos)
+  )
+
+for(i in (1:nrow(ds_results))){
+  
+  counties_grouped.os <- counties_grouped.os %>%
+    mutate(
+      logos = if_else(school == ds_results$loser[i], ds_results$winner_logos[i], logos),
+      school = if_else(school == ds_results$loser[i], ds_results$winner[i], school)
+    )
+
+}
+
+counties_sum.os <- counties_grouped.os %>% 
+  group_by(school) %>% 
+  summarize(
+    sum_total = sum(sum(sum_total, na.rm = T)),
+    sum_land = sum(sum(sum_land, na.rm = T)),
+    sum_water = sum(sum(sum_water, na.rm = T)),
+    sum_population = sum(sum(total_pop, na.rm = T)),
+    sum_n = sum(sum(n, na.rm = T))
+    ) %>%
+  left_join(., ds_teams %>% dplyr::select(school, logos), by = "school")
+
+logoIcons.os <- icons(
+  iconUrl = counties_grouped.os$logos,
+  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10,
+  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10
+)
+
+
+```
+
+CFB Imperialism Map 
+=====================================
+
+Row
+-----------------------------------------------------------------------
+
+### Imperialism Map | `r now()`
+
+```{r}
+
+leaflet() %>%
+  setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
+  addPolygons(data = counties_grouped.os, smoothFactor = 0.2, color = ~fill_team(school), fillOpacity = 0.9, label = ~school, weight = 0.8,
+              highlightOptions = highlightOptions(color = 'white', weight = 1,
+                                                  bringToFront = FALSE)) %>%
+  addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
+                   popup = paste0("<center><img src=", ds_teams$logos, " width = '50' height = '50'>",
+                                  "<br><hr><b>", ds_teams$school, "</center>",
+                                  "</b><br>", ds_teams$conference,
+                                  "<br>Mascot: ", ds_teams$mascot
+                   )) %>%
+  addMarkers(data = st_centroid(counties_grouped.os), label = ~school, icon = logoIcons.os,
+             popup = paste0(
+               "<center><b>", counties_grouped.os$city, " Territory, home of the ", counties_grouped.os$mascot, "</b><br></center>",
+               "<center>Currently Controlled by ", counties_grouped.os$school, "<br></center>",
+               "<hr>",
+               "Territory Area: ", format(round(counties_grouped.os$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+               "Territory Water area: ", format(round(counties_grouped.os$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+               "No. of Counties in Territory: ", format(counties_grouped.os$n, nsmall = 1, big.mark = ","), "<br>",
+               "Territory Population: ", format(counties_grouped.os$total_pop, big.mark = ",")
+             )
+             ) %>%
+  addTiles() 
+
+```
+
+> This is the old school-style imperialism map. Each team starts with the counties closest to it, and then loses all their land to their opponents when defeated. You can hover over each territory to see its current owner (or tap if you're on mobile).
+
+Row
+-----------------------------------------------------------------------
+
+### Biggest Domain {.no-mobile}
+
+```{r}
+top_domain.os <- counties_sum.os %>% slice_max(order_by = sum_total, n = 1, with_ties = F) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    value = top_domain.os,
+    caption = paste0(
+      "Biggest Domain: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_total, n = 1, with_ties = F) %>% 
+                     pull(var = sum_total), 1), big.mark = ","), "Sq. miles"),
+    color = ds_teams %>% filter(school == top_domain.os) %>% pull(var = color)
+  )
+  
+})
+```
+
+### Largest Water Area {.no-mobile}
+
+```{r}
+top_water.os <- counties_sum.os %>% slice_max(order_by = sum_water, n = 1, with_ties = F) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    value = top_water.os,
+    caption = paste0(
+      "Largest Water Area: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_water, n = 1, with_ties = F) %>% 
+                     pull(var = sum_water), 1), big.mark = ","), "Sq. miles"),
+    color = ds_teams %>% filter(school == top_water.os) %>% pull(var = color)
+  )
+  
+})
+```
+
+### Biggest Land Domain {.no-mobile}
+
+```{r}
+top_land.os <- counties_sum.os %>% slice_max(order_by = sum_land, n = 1, with_ties = F) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    value = top_land.os,
+    caption = paste0(
+      "Largest Land Area: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_land, n = 1, with_ties = F) %>% 
+                     pull(var = sum_land), 1), big.mark = ","), "Sq. miles"),
+    color = ds_teams %>% filter(school == top_land.os) %>% pull(var = color)
+  )
+  
+})
+```
+
+### Most Counties Controlled {.no-mobile}
+
+```{r}
+top_counties.os <-  counties_sum.os %>% slice_max(order_by = sum_n, n = 1, with_ties = F) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    value = top_counties.os,
+    caption = paste0(
+      "Most Counties Controlled: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_n, n = 1, with_ties = F) %>% 
+                     pull(var = sum_n), 1), big.mark = ",")),
+    color = ds_teams %>% filter(school == top_counties.os) %>% pull(var = color)
+  )
+  
+})
+```
+
+### Largest Population {.no-mobile}
+
+```{r}
+top_pop.os <- counties_sum.os %>% slice_max(order_by = sum_population, n = 1, with_ties = F) %>% pull(var = school)
+
+renderValueBox({
+  
+  valueBox(
+    value = top_pop.os,
+    caption = paste0(
+      "Largest Population: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_population, n = 1, with_ties = F) %>% 
+                     pull(var = sum_population), 1), big.mark = ","), " people"),
+    color = ds_teams %>% filter(school == top_pop.os) %>% pull(var = color)
+  )
+  
+})
+
+
+```
+
+Stat Explorer
+=====================================
+
+Row
+------
+
+### Statistics Table
+
+```{r}
+
+renderDataTable({
+
+
+  DT::datatable(
+    data = counties_sum.os %>%
+      dplyr::select(c(logos, school, sum_n, sum_land, sum_water, sum_total, sum_population)) %>%
+      st_drop_geometry() %>%
+      mutate(
+        sum_land = round(sum_land, 2),
+        sum_water = round(sum_water, 2),
+        sum_total = round(sum_total, 2),
+        sum_population = round(sum_population, 2),
+        logos = paste0("<img src='", logos, "' width='50' height='50'>")
+      ) %>%
+      rename(
+        Team = school,
+        'Counties Controlled' = sum_n,
+        'Total Land Area (sq. mi.)' = sum_land,
+        'Total Water Area (sq. mi.)' = sum_water,
+        'Total Territory (sq. mi.)' = sum_total,
+        'Total Population' = sum_population
+      ),
+    rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')),
+    extensions = 'Buttons',
+    escape = FALSE
+  ) %>%
+  formatRound(c('Total Land Area (sq. mi.)', 'Total Water Area (sq. mi.)', 'Total Territory (sq. mi.)', 'Total Population'), digits = 0)
+
+})
+
+```

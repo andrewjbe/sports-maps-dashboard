@@ -39,7 +39,8 @@ ds_teams_ <- cfbd_team_info(year = year(today())) %>%
   mutate(
     latitude = if_else(school == "Illinois", 40.1020, latitude),
     longitude = if_else(school == "Illinois", -88.2272, longitude),
-    color = if_else(school == "LSU", "#461D7C", color)
+    color = if_else(school == "LSU", "#461D7C", color),
+    color = if_else(school == "Iowa", "#FCD116", color)
   )
 
 # Make this reactive?
@@ -771,30 +772,60 @@ ds_results_ <- cfbd_game_info(year = year(today()))
 
 load("old_school_imperialism_base_map.Rdata")
 
-fill_team <- colorFactor(counties_grouped.os$color, counties_grouped.os$school)
+counties_grouped.os <- counties_grouped.os %>%
+  # Some colors don't show up well w/ the logos  
+  mutate(
+    color = if_else(school == "LSU", "#461D7C", color),
+    color = if_else(school == "Iowa", "#FCD116", color),
+    color = if_else(school == "SMU", "#354CA1", color),
+    color = if_else(school == "TCU", "#ffffff", color),
+    color = if_else(school == "Michigan State", "#ffffff", color),
+    color = if_else(school == "UCLA", "#F2A900", color),
+    color = if_else(school == "USC", "#990000", color)
+  )
 
+fill_team <- colorFactor(counties_grouped.os$color, counties_grouped.os$school)
 
 ds_results <- ds_results_ %>%
   filter(!is.na(home_points)) %>%
   mutate(
     winner = if_else(home_points > away_points, home_team, away_team),
+    # handles FCS upsets
+    winner = if_else(winner %in% ds_teams$school, winner, paste(winner, "(FCS)")),
     loser = if_else(home_points < away_points, home_team, away_team)
   ) %>%
-  dplyr::select(winner, loser)
+  dplyr::select(winner, loser) %>%
+  left_join(., ds_teams %>% dplyr::select(school, logos, color) %>% rename(winner = school), by = "winner") %>%
+  rename(winner_logos = logos, winner_color = color) %>%
+  # Handles FCS upsets
+  mutate(
+    winner_logos = if_else(is.na(winner_logos), "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.svg", winner_logos)
+  )
 
 for(i in (1:nrow(ds_results))){
   
   counties_grouped.os <- counties_grouped.os %>%
     mutate(
+      logos = if_else(school == ds_results$loser[i], ds_results$winner_logos[i], logos),
       school = if_else(school == ds_results$loser[i], ds_results$winner[i], school)
     )
 
-  }
+}
 
+counties_sum.os <- counties_grouped.os %>% 
+  group_by(school) %>% 
+  summarize(
+    sum_total = sum(sum(sum_total, na.rm = T)),
+    sum_land = sum(sum(sum_land, na.rm = T)),
+    sum_water = sum(sum(sum_water, na.rm = T)),
+    sum_population = sum(sum(total_pop, na.rm = T)),
+    sum_n = sum(sum(n, na.rm = T))
+    )
 
-logoIcons <- icons(
+logoIcons.os <- icons(
   iconUrl = counties_grouped.os$logos,
-  iconWidth = 25, iconHeight = 25
+  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10,
+  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10
 )
 
 leaflet() %>%
@@ -808,20 +839,17 @@ leaflet() %>%
                                   "</b><br>", ds_teams$conference,
                                   "<br>Mascot: ", ds_teams$mascot
                    )) %>%
-  # addCircleMarkers(data = counties_grouped.os, label = "", lat = ~latitude, lng = ~longitude,
-  #                  stroke = F, color = "white", fill = "white", fillOpacity = 0.8, radius = 16) %>%
-  # addMarkers(data = counties_grouped.os, label = ~school,  lat = ~latitude, lng = ~longitude,
-  #            popup = paste0(
-  #              "<center><b>", counties_grouped.os$school, "'s</b> Domain<br></center>",
-  #              "<hr>",
-  #              "No. of AP points: ", format(counties_grouped.os$points, nsmall = 1, big.mark = ","), "<br>",
-  #              "Current AP Poll Rank: ", format(counties_grouped.os$rank, nsmall = 1, big.mark = ","), "<br>",
-  #              "<hr>",
-  #              "Total land area: ", format(round(counties_grouped.os$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
-  #              "Total water area: ", format(round(counties_grouped.os$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
-  #              "No. of Counties: ", format(counties_grouped.os$n, nsmall = 1, big.mark = ","), "<br>",
-  #              "Total Population: ", format(counties_grouped.os$total_pop, big.mark = ",")
-  #            ), icon = logoIcons) %>%
+  addMarkers(data = st_centroid(counties_grouped.os), label = ~school, icon = logoIcons.os,
+             popup = paste0(
+               "<center><b>", counties_grouped.os$city, " Territory, home of the ", counties_grouped.os$mascot, "</b><br></center>",
+               "<center>Currently Controlled by ", counties_grouped.os$school, "<br></center>",
+               "<hr>",
+               "Territory Area: ", format(round(counties_grouped.os$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+               "Territory Water area: ", format(round(counties_grouped.os$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+               "No. of Counties in Territory: ", format(counties_grouped.os$n, nsmall = 1, big.mark = ","), "<br>",
+               "Territory Population: ", format(counties_grouped.os$total_pop, big.mark = ",")
+             )
+             ) %>%
   addTiles() 
 
 
@@ -836,36 +864,36 @@ Row
 ### Biggest Domain {.no-mobile}
 
 ```{r}
-top_domain.os <- counties_grouped.os %>% group_by(school) %>% summarize(sum_total = sum(sum(sum_total, na.rm = T))) %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school)
+top_domain.os <- counties_sum.os %>% slice_max(order_by = sum_total, n = 1, with_ties = F) %>% pull(var = school)
 
 renderValueBox({
   
   valueBox(
-    paste0(
-      top_domain.os
-    ),
+    value = top_domain.os,
+    caption = paste0(
+      "Biggest Domain: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_total, n = 1, with_ties = F) %>% 
+                     pull(var = sum_total), 1), big.mark = ","), "Sq. miles"),
     color = ds_teams %>% filter(school == top_domain.os) %>% pull(var = color)
-  ) %>% bs_embed_tooltip(
-    title = paste(format(round(counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
   )
   
 })
 ```
 
-### Biggest Water Domain {.no-mobile}
+### Largest Water Area {.no-mobile}
 
 ```{r}
-top_water.os <- counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = school)
+top_water.os <- counties_sum.os %>% slice_max(order_by = sum_water, n = 1, with_ties = F) %>% pull(var = school)
 
 renderValueBox({
   
   valueBox(
-    paste0(
-      counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = school)
-    ),
+    value = top_water.os,
+    caption = paste0(
+      "Largest Water Area: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_water, n = 1, with_ties = F) %>% 
+                     pull(var = sum_water), 1), big.mark = ","), "Sq. miles"),
     color = ds_teams %>% filter(school == top_water.os) %>% pull(var = color)
-  ) %>% bs_embed_tooltip(
-    title = paste(format(round(counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
   )
   
 })
@@ -874,17 +902,17 @@ renderValueBox({
 ### Biggest Land Domain {.no-mobile}
 
 ```{r}
-top_land.os <- counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = school)
+top_land.os <- counties_sum.os %>% slice_max(order_by = sum_land, n = 1, with_ties = F) %>% pull(var = school)
 
 renderValueBox({
   
   valueBox(
-    paste0(
-      counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = school)
-    ),
+    value = top_land.os,
+    caption = paste0(
+      "Largest Land Area: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_land, n = 1, with_ties = F) %>% 
+                     pull(var = sum_land), 1), big.mark = ","), "Sq. miles"),
     color = ds_teams %>% filter(school == top_land.os) %>% pull(var = color)
-  ) %>% bs_embed_tooltip(
-    title = paste(format(round(counties_grouped.os %>% ungroup() %>% slice_max(order_by = sum_land, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles")
   )
   
 })
@@ -893,17 +921,17 @@ renderValueBox({
 ### Most Counties Controlled {.no-mobile}
 
 ```{r}
-top_counties.os <- counties_grouped.os %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = school)
+top_counties.os <-  counties_sum.os %>% slice_max(order_by = sum_n, n = 1, with_ties = F) %>% pull(var = school)
 
 renderValueBox({
   
   valueBox(
-    paste0(
-      counties_grouped.os %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = school)
-    ),
+    value = top_counties.os,
+    caption = paste0(
+      "Most Counties Controlled: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_n, n = 1, with_ties = F) %>% 
+                     pull(var = sum_n), 1), big.mark = ",")),
     color = ds_teams %>% filter(school == top_counties.os) %>% pull(var = color)
-  ) %>% bs_embed_tooltip(
-    title = paste(format(round(counties_grouped.os %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = n), 1), nsmall = 1, big.mark = ","), "counties")
   )
   
 })
@@ -912,19 +940,19 @@ renderValueBox({
 ### Largest Population {.no-mobile}
 
 ```{r}
-top_pop.os <- counties_grouped.os %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = school)
+top_pop.os <- counties_sum.os %>% slice_max(order_by = sum_population, n = 1, with_ties = F) %>% pull(var = school)
 
 renderValueBox({
-
+  
   valueBox(
-    paste0(
-      counties_grouped.os %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = school)
-    ),
+    value = top_pop.os,
+    caption = paste0(
+      "Largest Population: ", 
+      format(round(counties_sum.os %>% slice_max(order_by = sum_population, n = 1, with_ties = F) %>% 
+                     pull(var = sum_population), 1), big.mark = ","), " people"),
     color = ds_teams %>% filter(school == top_pop.os) %>% pull(var = color)
-  ) %>% bs_embed_tooltip(
-    title = paste(format(round(counties_grouped.os %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = total_pop), 1), big.mark = ","), "people")
   )
-
+  
 })
 
 
