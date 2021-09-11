@@ -5,6 +5,7 @@ output:
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
+    source_code: 'https://github.com/andrewjbe/sports-maps-dashboard'
 ---
 
 ```{r setup, include=FALSE}
@@ -24,7 +25,7 @@ options(scipen = 999)
 # Sys.setenv(CFBD_API_KEY="")
 
 # Team info (colors / logo / mascot / etc.)
-ds_teams_ <- cfbd_team_info(year = year(today())) %>%
+ds_teams_ <- cfbd_team_info(year = year(today()), only_fbs = F) %>%
   unnest(cols = c(logos)) %>%
   distinct(team_id, .keep_all = TRUE) %>%
   # Illinois' location is all screwed up for some reason, fixing some colors as well.
@@ -46,6 +47,7 @@ ds_teams <- ds_teams_ %>%
 
 ds_results_ <- cfbd_game_info(year = year(today()))
 
+# This loads the starting map, an sf multipolygon / dataframe named 'counties_grouped.os' 
 load("old_school_imperialism_base_map.Rdata")
 
 counties_grouped.os <- counties_grouped.os %>%
@@ -57,7 +59,8 @@ counties_grouped.os <- counties_grouped.os %>%
     color = if_else(school == "TCU", "#ffffff", color),
     color = if_else(school == "Michigan State", "#ffffff", color),
     color = if_else(school == "UCLA", "#F2A900", color),
-    color = if_else(school == "USC", "#990000", color)
+    color = if_else(school == "USC", "#990000", color),
+    color = if_else(school == "Cincinnati", "#E00122", color)
   )
 
 fill_team <- colorFactor(counties_grouped.os$color, counties_grouped.os$school)
@@ -73,8 +76,23 @@ ds_results <- ds_results_ %>%
   dplyr::select(winner, loser) %>%
   left_join(., ds_teams %>% dplyr::select(school, logos, color) %>% rename(winner = school), by = "winner") %>%
   rename(winner_logos = logos, winner_color = color) %>%
-  # Handles FCS upsets
+  # Handles FCS upsets; I have to hardcode these in because the FCS teams aren't in the api data
   mutate(
+    winner_logos = case_when(
+      winner == "UC Davis (FCS)" ~ 
+        "https://a3.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fsoccer%2F500%2F5745.png",
+      winner == "Eastern Washington (FCS)" ~ 
+        "https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/331.png",
+      winner == "South Dakota State (FCS)" ~ 
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/2571.png",
+      winner == "Holy Cross (FCS)" ~ 
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/107.png",
+      winner == "East Tennessee State (FCS)" ~ 
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/2193.png",
+      winner == "Montana (FCS)" ~ 
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/149.png",
+      TRUE ~ winner_logos
+    ),
     winner_logos = if_else(is.na(winner_logos), "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.svg", winner_logos)
   )
 
@@ -101,8 +119,8 @@ counties_sum.os <- counties_grouped.os %>%
 
 logoIcons.os <- icons(
   iconUrl = counties_grouped.os$logos,
-  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10,
-  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10
+  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 12,
+  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 12
 )
 
 
