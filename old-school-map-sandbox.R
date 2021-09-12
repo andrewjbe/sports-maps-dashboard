@@ -160,6 +160,7 @@ logoIcons.os <- icons(
   iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 25
 )
 
+# change to 'color = ~faction' to switch to SEC vs. Alliance map
 
 m <- leaflet(height = 1600, width = 3000) %>%
   setView(lng = -95.24580, lat = 38.95909, zoom = 6) %>%
@@ -182,6 +183,30 @@ m <- leaflet(height = 1600, width = 3000) %>%
 
 mapshot(m, file = paste0("imperialism-map-", today(), ".png"), selfcontained = F)
 
+# alliance / sec map -----------------------------------------------------------
+
+leaflet() %>%
+  setView(lng = -95.24580, lat = 38.95909, zoom = 5) %>%
+  addPolygons(data = counties_grouped.os, smoothFactor = 0.2, color = ~faction, fillOpacity = 0.9, label = ~school, weight = 0.8,
+              highlightOptions = highlightOptions(color = 'white', weight = 1,
+                                                  bringToFront = FALSE)) %>%
+  # addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
+  #                  popup = paste0("<center><img src=", ds_teams$logos, " width = '50' height = '50'>",
+  #                                 "<br><hr><b>", ds_teams$school, "</center>",
+  #                                 "</b><br>", ds_teams$conference,
+  #                                 "<br>Mascot: ", ds_teams$mascot
+  #                  )) %>%
+  addMarkers(data = st_centroid(counties_grouped.os), label = ~school, icon = logoIcons.os,
+             popup = paste0(
+               "<center><b>", counties_grouped.os$city, " Territory, home of the ", counties_grouped.os$mascot, "</b><br></center>",
+               "<center>Currently Controlled by ", counties_grouped.os$school, "<br></center>",
+               "<hr>",
+               "Territory Area: ", format(round(counties_grouped.os$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+               "Territory Water area: ", format(round(counties_grouped.os$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
+               "No. of Counties in Territory: ", format(counties_grouped.os$n, nsmall = 1, big.mark = ","), "<br>",
+               "Territory Population: ", format(counties_grouped.os$total_pop, big.mark = ",")
+             )
+  ) 
 
 
 # Power proj. -----------
@@ -207,7 +232,7 @@ library(mapview)
 
 options(scipen = 999)
 
-Sys.setenv(CFBD_API_KEY="neeLQPezar1Yeix/erf8rO1RwY6npKvZKi3lDEsKiF7VDYiPNmRmiWjHhfsm8t4c")
+# Sys.setenv(CFBD_API_KEY="")
 
 ds_teams_ <- cfbd_team_info(year = year(today())) %>%
   unnest(cols = c(logos)) %>%
@@ -321,8 +346,7 @@ counties_grouped <- counties_grouped %>%
     logos = if_else(grepl("Alabama|Texas A&M", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos)
   )
 
-# Map -
-
+# Power Projection Map -
 
 logoIcons <- icons(
   iconUrl = counties_grouped$logos,

@@ -135,6 +135,15 @@ counties_sum.os <- counties_grouped.os %>%
   dplyr::select(-conference) %>%
   left_join(., ds_teams %>% dplyr::select(school, logos), by = "school")
 
+factions_sum.os <- counties_grouped.os %>%
+  group_by(faction) %>%
+    summarize(
+    sum_total = sum(sum(sum_total, na.rm = T)),
+    sum_land = sum(sum(sum_land, na.rm = T)),
+    sum_water = sum(sum(sum_water, na.rm = T)),
+    sum_population = sum(sum(total_pop, na.rm = T)),
+    sum_n = sum(sum(n, na.rm = T))
+    ) 
 
 logoIcons.os <- icons(
   iconUrl = counties_grouped.os$logos,
