@@ -412,9 +412,8 @@ options(scipen = 999)
 
 # Sys.setenv(CFBD_API_KEY="")
 
-for(j in 1:20){
-
 year <- 2020
+j <- 2
 
 ds_teams_ <- cfbd_team_info(year = year) %>%
   unnest(cols = c(logos)) %>%
@@ -531,14 +530,6 @@ counties_grouped <- counties_grouped %>%
     logos = if_else(school == "Kansas State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png", logos)
   )
 
-# Hawaii inset
-
-hawaii <- counties_ |>
-  filter(STATEFP == 15) |>
-  group_by(school, logos, color) |>
-  summarize() |>
-  st_cast("MULTIPOLYGON")
-
 
 # Power Projection Map -
 
@@ -562,5 +553,6 @@ p <- leaflet(height = 1600, width = 3000) %>%
 mapshot(p, file = paste0(year, "-pp-map-week-", j, ".png"), selfcontained = F)
 
 gc()
+rm(list = ls())
 
-}
+
