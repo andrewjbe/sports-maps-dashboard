@@ -132,7 +132,7 @@ counties_sum.os <- counties_grouped.os %>%
     sum_population = sum(sum(total_pop, na.rm = T)),
     sum_n = sum(sum(n, na.rm = T))
     ) %>%
-  dplyr::select(-conference) %>%
+ # dplyr::select(-conference) %>%
   left_join(., ds_teams %>% dplyr::select(school, logos), by = "school")
 
 factions_sum.os <- counties_grouped.os %>%

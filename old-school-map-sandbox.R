@@ -275,7 +275,7 @@ counties <- counties %>%
 closest_ <- list()
 for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
-    (ds_teams$points) * (1 / sf::st_distance(pnts_sf, counties[i, ])^2)
+    (ds_teams$points) * (1 / sf::st_distance(pnts_sf, counties[i, ]))
     ), ]
  print(paste0(round(100 * i / nrow(counties), 2), "%"))
 }
