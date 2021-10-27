@@ -9,130 +9,87 @@ output:
 ---
 
 ```{r setup, include=FALSE, cache=TRUE}
+# TODO: get rid of the superflous libraries, I'm not using all of these
 library(flexdashboard)
 library(cfbfastR)
 library(tidyverse)
-library(ggimage)
 library(sf)
-library(tigris)
+library(tigris) #
 library(leaflet)
 library(RCurl)
-library(png)
+library(png) #
 library(bslib)
 library(bsplus)
 library(DT)
 library(lwgeom)
 library(raster)
 library(data.table)
-library(plotly)
+library(plotly) #
 library(lubridate)
 library(ggthemes)
 
 options(scipen = 999)
 
-Sys.setenv(CFBD_API_KEY="")
+# Insert your CFBD API key here (nothing will run otherwise):
+# https://saiemgilani.github.io/cfbfastR/reference/register_cfbd.html
+# Sys.setenv(CFBD_API_KEY="")
 
-ds_teams_ <- cfbd_team_info(year = year(today())) %>%
+source("keys.R")
+
+ds_teams <- cfbd_team_info(year = year(today())) %>%
   unnest(cols = c(logos)) %>%
   distinct(team_id, .keep_all = TRUE) %>%
+  # Fixing team colors / logos / names / etc.
   # Illinois' location is all screwed up for some reason
   mutate(
     latitude = if_else(school == "Illinois", 40.1020, latitude),
     longitude = if_else(school == "Illinois", -88.2272, longitude),
     color = if_else(school == "LSU", "#461D7C", color),
-    color = if_else(school == "Iowa", "#FCD116", color)
+    color = if_else(school == "Iowa", "#FCD116", color),
+    color = if_else(school == "SMU", "#354CA1", color),
+    color = if_else(school == "TCU", "#ffffff", color),
+#    color = if_else(school == "Michigan State", "#ffffff", color),
+    color = if_else(school == "Utah", "#CC0000", color),
+    color = if_else(school == "UCLA", "#F2A900", color),
+    color = if_else(school == "Miami (OH)", "black", color),
+    color = if_else(school == "Fresno State", "#13284c", color),
+    color = if_else(school == "Wisconsin", "#FFFFFF", color),
+    color = if_else(school == "USC", "#990000", color),
+    color = if_else(school == "Cincinnati", "#444444", color),
+    color = if_else(school == "San Diego State", "#A6192E", color),
+    color = if_else(school == "UT San Antonio", "#F15A22", color),
+    color = if_else(school == "Pittsburgh", "#FFB81C", color),
+    logos = if_else(school == "Oregon", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2483.png", logos),
+    logos = if_else(school == "Oklahoma", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/201.png", logos),
+    logos = if_else(school == "Kansas State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png", logos),
+    logos = if_else(school == "Clemson", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/228.png", logos),
+    logos = if_else(school == "Air Force", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2005.png", logos),
+    logos = if_else(school == "Michigan State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/127.png", logos),
+    logos = if_else(school == "Nevada", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2440.png", logos),
+    school = if_else(school == "UT San Antonio", "UTSA", school)
   )
 
-# Make this reactive?
-ds_rank <- cfbd_rankings(year = year(today()), season_type = "regular") %>%
-  filter(poll == "AP Top 25",
-         !is.na(points)) %>%
-  filter(week == max(week)) %>%
-  dplyr::select(c(week, poll, season_type, rank, school, first_place_votes, points))
-
-ds_teams <- ds_teams_ %>%
-  left_join(., ds_rank)
-
+# Creating sf object w/ a point for every stadium location
 pnts_sf <- st_as_sf(ds_teams, coords = c("longitude", "latitude"))
 st_crs(pnts_sf) <- 4326
 
+# County borders overlay -- saved to RDS to save load time
 # counties <- counties(cb = TRUE, resolution = "20m")
-# st_crs(counties) <- 4326
-# 
-# counties <- counties %>%
-#   mutate(
-#     n = row_number()
-#   )
-# 
-# closest_ <- list()
-# for (i in seq_len(nrow(counties))) {
-#   closest_[[i]] <- pnts_sf[which.max(
-#     (ds_teams$points) * (1 / sf::st_distance(pnts_sf, counties[i, ]))
-#     ), ]
-# # print(paste0(round(100 * i / nrow(counties), 2), "%"))
-# }
-# closest_ <- rbindlist(closest_)
-# 
-# closest_ <- closest_ %>%
-#   dplyr::select(school, color, logos) %>%
-#   mutate(
-#     n = row_number()
-#   )
-# 
-# counties_ <- left_join(counties, closest_, by = "n")
-# 
-# # counties_pop <- get_estimates(geography = "county", product = "population") %>%
-# #   rename(estimate = value)
-# # write_csv(counties_pop, "counties_pop.csv")
-# 
-# counties_pop <- read_csv("counties_pop.csv")
-# 
-# counties_ <- merge(counties_, counties_pop, by = "GEOID")
-# 
-# counties_ <- counties_ %>%
-#   rename(
-#     population = estimate
-#   ) %>%
-#   dplyr::select(!variable)
-# 
-# # Removes Alaska
-# counties_ <- counties_ %>%
-#   filter(STATEFP != "02",
-#          STATEFP != "72")
-# 
-# counties_grouped <- counties_ %>%
-#   group_by(school, logos, color) %>%
-#   summarise(
-#     n = n(),
-#     sum_land = sum(ALAND) * 0.000000386102,
-#     sum_water = sum(AWATER) * 0.000000386102,
-#     sum_total = sum_land + sum_water,
-#     total_pop = sum(population)
-#   ) %>%
-#   st_cast("MULTIPOLYGON")
-# 
-# counties_grouped <- counties_grouped %>%
-#   left_join(., ds_teams)
-# 
-#   
-# ds_teams <- pnts_sf %>% 
-#   mutate(
-#     intersection = as.integer(st_intersects(geometry, counties_grouped)), 
-#     current_overlord = if_else(is.na(intersection), '', counties_grouped$school[intersection])
-#     ) %>%
-#   dplyr::select(current_overlord, school) %>%
-#   left_join(ds_teams, ., by = "school")
-# 
-# n_subjects <- ds_teams %>% group_by(current_overlord) %>% summarize(n_capitols = n(), capitol_list = paste(school, collapse = ", ")) %>%
-#   rename(school = current_overlord)
-# 
-# ds_teams <- ds_teams %>%
-#   left_join(., n_subjects, by = "school")
-#   
-# counties_grouped <- counties_grouped %>%
-#   left_join(., n_subjects, by = "school")
+# counties <- st_transform(counties, 4326)
+# saveRDS(counties, "counties_shape.RDS")
+
+counties <- readRDS("counties_shape.RDS")
+
+# states <- states(cb = TRUE, resolution = "20m")
+# states <- st_transform(states, 4326)
+# saveRDS(states, "states_shape.RDS")
+
+states <- readRDS("states_shape.RDS")
   
-# List of available poll weeks / years
+# List of available poll weeks / years; only needs to be run once a year -----------------------------------------
+# This has nothing to do with the imperialism map, it's for the interactive power proj. map
+
+# TODO: this needs to be set to run automatically, but only once a year. 
 
 # poll_list_ <- tibble()
 # 
@@ -169,203 +126,13 @@ st_crs(pnts_sf) <- 4326
 
 poll_list <- read_csv("poll_list.csv")
 
+# Adding this year's polls
 poll_list <- poll_list %>%
   rbind(., cfbd_rankings(year = year(today()), season_type = "regular") %>%
           distinct(week, season, season_type) %>%
           mutate(season = year(today())))
 
 ```
-
-<!-- Power Projection Map {data-navmenu="Current Power Projection Map"} -->
-<!-- ===================================== -->
-
-<!-- Row  -->
-<!-- ----------------------------------------------------------------------- -->
-
-<!-- ### Power Projection Map | `r today()` -->
-
-<!-- ```{r} -->
-
-<!-- logoIcons <- icons( -->
-<!--   iconUrl = counties_grouped$logos, -->
-<!--   iconWidth = 25, iconHeight = 25 -->
-<!-- ) -->
-
-<!-- leaflet() %>% -->
-<!--   setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>% -->
-<!--   addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~color, fillOpacity = 0.8, label = ~school, weight = 0.8, -->
-<!--               highlightOptions = highlightOptions(color = 'white', weight = 1, -->
-<!--                                                   bringToFront = FALSE)) %>% -->
-<!--   addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5, -->
-<!--                    popup = paste0("<center><img src=", ds_teams$logos, " width = '50' height = '50'>", -->
-<!--                                   "<br><hr><b>", ds_teams$school, "</center>", -->
-<!--                                   "</b><br>", ds_teams$conference, -->
-<!--                                   "<br>Mascot: ", ds_teams$mascot -->
-<!--                                   )) %>% -->
-<!--   addCircleMarkers(data = counties_grouped, label = "", lat = ~latitude, lng = ~longitude, -->
-<!--                    stroke = F, color = "white", fill = "white", fillOpacity = 0.8, radius = 16) %>% -->
-<!--   addMarkers(data = counties_grouped, label = ~school,  lat = ~latitude, lng = ~longitude, -->
-<!--              popup = paste0( -->
-<!--     "<center><b>", counties_grouped$school, "'s</b> Domain<br></center>", -->
-<!--     "<hr>", -->
-<!--     "No. of AP points: ", format(counties_grouped$points, nsmall = 1, big.mark = ","), "<br>", -->
-<!--     "Current AP Poll Rank: ", format(counties_grouped$rank, nsmall = 1, big.mark = ","), "<br>", -->
-<!--     "<hr>", -->
-<!--     "Total land area: ", format(round(counties_grouped$sum_land, 1), nsmall = 1, big.mark = ","), " sq. miles<br>", -->
-<!--     "Total water area: ", format(round(counties_grouped$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>", -->
-<!--     "No. of Counties: ", format(counties_grouped$n, nsmall = 1, big.mark = ","), "<br>", -->
-<!--     "Total Population: ", format(counties_grouped$total_pop, big.mark = ",") -->
-<!--   ), icon = logoIcons) %>% -->
-<!--   addTiles()  -->
-<!--   # setMaxBounds(lng1 = -130, -->
-<!--   #              lat1 = 20, -->
-<!--   #              lng2 = -65, -->
-<!--   #              lat2 = 55) -->
-
-<!-- ``` -->
-
-<!-- > Each county is "controlled" by the team with the highest "power projection" score relative to that county. This score is equal to schools' total AP Poll votes (in the most recent poll) divided by the distance between the school and the nearest county border, in kilometers. In other words, each county is controlled by the strongest nearby team, with stronger teams having a longer "reach". Data source: https://github.com/saiemgilani/cfbfastR-data -->
-
-<!-- Row -->
-<!-- ----------------------------------------------------------------------- -->
-
-<!-- ### Biggest Domain {.no-mobile} -->
-
-<!-- ```{r} -->
-<!-- top_domain <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school) -->
-
-<!-- renderValueBox({ -->
-
-<!--   valueBox( -->
-<!--     paste0( -->
-<!--       counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = school) -->
-<!--     ), -->
-<!--     color = ds_teams %>% filter(school == top_domain) %>% pull(var = color) -->
-<!--   ) %>% bs_embed_tooltip( -->
-<!--     title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_total, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles") -->
-<!--   ) -->
-
-<!-- }) -->
-<!-- ``` -->
-
-<!-- ### Biggest Water Domain {.no-mobile} -->
-
-<!-- ```{r} -->
-<!-- top_water <- counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = school) -->
-
-<!-- renderValueBox({ -->
-
-<!--   valueBox( -->
-<!--     paste0( -->
-<!--       counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = school) -->
-<!--     ), -->
-<!--     color = ds_teams %>% filter(school == top_water) %>% pull(var = color) -->
-<!--   ) %>% bs_embed_tooltip( -->
-<!--     title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = sum_water, n = 1) %>% pull(var = sum_total), 1), nsmall = 1, big.mark = ","), "sq. miles") -->
-<!--   ) -->
-
-<!-- }) -->
-<!-- ``` -->
-
-<!-- ### CFB Stadiums Controlled {.no-mobile} -->
-
-<!-- ```{r} -->
-<!-- top_subjects <- n_subjects %>% slice_max(order_by = n_capitols, n = 1, with_ties = FALSE) -->
-
-<!-- renderValueBox({ -->
-
-<!--   valueBox( -->
-<!--     paste0( -->
-<!--       top_subjects$school[1] -->
-<!--     ), -->
-<!--     color = ds_teams %>% filter(school == top_subjects$school[1]) %>% pull(var = color) -->
-<!--   ) %>% bs_embed_tooltip( -->
-<!--     title = paste0(top_subjects$school[1], " currently has the most imperial subjects in their domain (", top_subjects$n_capitols[1], ")." ) -->
-<!--   ) -->
-
-<!-- }) -->
-<!-- ``` -->
-
-<!-- ### Most Counties Controlled {.no-mobile} -->
-
-<!-- ```{r} -->
-<!-- top_counties <- counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = school) -->
-
-<!-- renderValueBox({ -->
-
-<!--   valueBox( -->
-<!--     paste0( -->
-<!--       counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = school) -->
-<!--     ), -->
-<!--     color = ds_teams %>% filter(school == top_counties) %>% pull(var = color) -->
-<!--   ) %>% bs_embed_tooltip( -->
-<!--     title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = n, n = 1) %>% pull(var = n), 1), nsmall = 1, big.mark = ","), "counties") -->
-<!--   ) -->
-
-<!-- }) -->
-<!-- ``` -->
-
-<!-- ### Largest Population {.no-mobile} -->
-
-<!-- ```{r} -->
-<!-- top_pop <- counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = school) -->
-
-<!-- renderValueBox({ -->
-
-<!--   valueBox( -->
-<!--     paste0( -->
-<!--       counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = school) -->
-<!--     ), -->
-<!--     color = ds_teams %>% filter(school == top_pop) %>% pull(var = color) -->
-<!--   ) %>% bs_embed_tooltip( -->
-<!--     title = paste(format(round(counties_grouped %>% ungroup() %>% slice_max(order_by = total_pop, n = 1) %>% pull(var = total_pop), 1), big.mark = ","), "people") -->
-<!--   ) -->
-
-<!-- }) -->
-<!-- ``` -->
-
-<!-- Stat Explorer {data-navmenu="Current Power Projection Map"} -->
-<!-- ===================================== -->
-
-<!-- Row  -->
-<!-- -------------- -->
-
-<!-- ### Power Projection Domain Stats -->
-
-<!-- ```{r} -->
-
-<!--   DT::datatable( -->
-<!--     data = counties_grouped %>%  -->
-<!--       dplyr::select(c(logos, school, n, sum_land, sum_water, sum_total, total_pop, points, rank, n_capitols, capitol_list)) %>% -->
-<!--       st_drop_geometry() %>% -->
-<!--       mutate( -->
-<!--         sum_land = round(sum_land, 2), -->
-<!--         sum_water = round(sum_water, 2), -->
-<!--         sum_total = round(sum_total, 2), -->
-<!--         total_pop = round(total_pop, 2), -->
-<!--         logos = paste0("<img src='", logos, "' width='50' height='50'>") -->
-<!--       ) %>% -->
-<!--       rename( -->
-<!--         Team = school, -->
-<!--         'Counties Controlled' = n, -->
-<!--         'Total Land Area (sq. mi.)' = sum_land, -->
-<!--         'Total Water Area (sq. mi.)' = sum_water, -->
-<!--         'Total Territory (sq. mi.)' = sum_total, -->
-<!--         'Total Population' = total_pop, -->
-<!--         `Points in Latest AP Poll` = points, -->
-<!--         `Rank in Latest AP Poll` = rank, -->
-<!--         `No. CFB Stadiums Controlled` = n_capitols, -->
-<!--         `Stadiums Controlled` = capitol_list -->
-<!--       ), -->
-<!--     rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip', -->
-<!--     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')),  -->
-<!--     extensions = 'Buttons', -->
-<!--     escape = FALSE -->
-<!--   ) %>% -->
-<!--   formatRound(c('Total Land Area (sq. mi.)', 'Total Water Area (sq. mi.)', 'Total Territory (sq. mi.)', 'Total Population'), digits = 0) -->
-
-
-<!-- ``` -->
 
 
 Imperialism Map {data-navmenu="Imperialism Map"}
@@ -378,94 +145,165 @@ Row
 
 ```{r}
 
-ds_results_ <- cfbd_game_info(year = year(today()))
+ds_results_ <- cfbd_game_info(year = year(today()), season_type = "both")
+max_weeks <- as.numeric(max(ds_results_$week))
+ds_results_ <- ds_results_ |>
+  mutate(week = if_else(season_type == "postseason", max_weeks + 1, as.numeric(week)))
 
-load("old_school_imperialism_base_map.Rdata")
+# Loading in base map
+load("old_school_imperialism_base_map-3.Rdata")
 
 counties_grouped.os <- counties_grouped.os %>%
-  # Some colors don't show up well w/ the logos
+  # Have to change everything here too
+  # TODO: replace this with something less cumbersome. Just write a function up top?
   mutate(
     color = if_else(school == "LSU", "#461D7C", color),
     color = if_else(school == "Iowa", "#FCD116", color),
     color = if_else(school == "SMU", "#354CA1", color),
     color = if_else(school == "TCU", "#ffffff", color),
-    color = if_else(school == "Michigan State", "#ffffff", color),
+#    color = if_else(school == "Michigan State", "#ffffff", color),
+    color = if_else(school == "Utah", "#CC0000", color),
     color = if_else(school == "UCLA", "#F2A900", color),
-    color = if_else(school == "USC", "#990000", color)
+    color = if_else(school == "Miami (OH)", "black", color),
+    color = if_else(school == "Wisconsin", "#FFFFFF", color),
+    color = if_else(school == "San Diego State", "#A6192E", color),
+    color = if_else(school == "Fresno State", "#13284c", color),
+    color = if_else(school == "USC", "#990000", color),
+    color = if_else(school == "UT San Antonio", "#F15A22", color),
+    color = if_else(school == "Cincinnati", "#444444", color),
+    color = if_else(school == "Pittsburgh", "#FFB81C", color),
+    logos = if_else(school == "Oregon", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2483.png", logos),
+    logos = if_else(school == "Oklahoma", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/201.png", logos),
+    logos = if_else(school == "Kansas State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png", logos),
+    logos = if_else(school == "Clemson", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/228.png", logos),
+    logos = if_else(school == "Air Force", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2005.png", logos),
+    logos = if_else(school == "Nevada", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2440.png", logos),
+    logos = if_else(school == "Michigan State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/127.png", logos),
+    school = if_else(school == "UT San Antonio", "UTSA", school)
   )
 
-fill_team <- colorFactor(counties_grouped.os$color, counties_grouped.os$school)
+# function to apply the correct colors to each territory 
+fill_team <- colorFactor(ds_teams$color, ds_teams$school)
 
 ds_results <- ds_results_ %>%
   filter(!is.na(home_points)) %>%
   mutate(
     winner = if_else(home_points > away_points, home_team, away_team),
-    # handles FCS upsets
-    winner = if_else(winner %in% ds_teams$school, winner, paste(winner, "(FCS)")),
+    # winner = if_else(winner %in% ds_teams$school, winner, paste(winner, "(FCS)")),
     loser = if_else(home_points < away_points, home_team, away_team)
   ) %>%
   dplyr::select(winner, loser) %>%
-  left_join(., ds_teams %>% dplyr::select(school, logos, color) %>% rename(winner = school), by = "winner") %>%
+  left_join(., ds_teams %>% dplyr::select(school, logos, color, conference) %>% rename(winner = school), by = "winner") %>%
   rename(winner_logos = logos, winner_color = color) %>%
   # Handles FCS upsets; I have to hardcode these in because the FCS teams aren't in the api data
+  # TODO: check if they're in there now / find a way to avoid this
   mutate(
     winner_logos = case_when(
-      winner == "UC Davis (FCS)" ~ 
-        "https://a3.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fsoccer%2F500%2F5745.png",
-      winner == "Eastern Washington (FCS)" ~ 
-        "https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/331.png",
-      winner == "South Dakota State (FCS)" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/2571.png",
-      winner == "Holy Cross (FCS)" ~ 
+      winner == "UC Davis" ~ 
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/2502.png",
+      winner == "Eastern Washington" ~ 
+        "https://a.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2692.png",
+      winner == "South Dakota State" ~ 
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/79.png",
+      winner == "Holy Cross" ~ 
         "https://a.espncdn.com/i/teamlogos/ncaa/500/107.png",
-      winner == "East Tennessee State (FCS)" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/2193.png",
-      winner == "Montana (FCS)" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/149.png",
+      winner == "East Tennessee State" ~ 
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/236.png",
+      winner == "Montana" ~ 
+        "https://a.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2692.png",
+      winner == "Incarnate Word" ~ 
+        "https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/2377.png",
       TRUE ~ winner_logos
     ),
+    # default logo for if the others are missing
     winner_logos = if_else(is.na(winner_logos), "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.svg", winner_logos)
-  )
+  ) %>%
+  distinct()
 
+# This is the loop that iterates through each game result and gives the loser's land to the winner
+# TODO: ideally I should only have to change the name, then have this point to a different df w/ the logo, color, etc. 
 for(i in (1:nrow(ds_results))){
 
   counties_grouped.os <- counties_grouped.os %>%
     mutate(
+      conference = if_else(school == ds_results$loser[i], ds_results$conference[i], conference),
       logos = if_else(school == ds_results$loser[i], ds_results$winner_logos[i], logos),
       school = if_else(school == ds_results$loser[i], ds_results$winner[i], school)
     )
+  
+  # if(i %% (nrow(ds_results) / 4) == 0){
+  #   print(paste0(
+  #     round(100 * (i / nrow(ds_results)), 2), "% done...")
+  #     )
+  # }
 
 }
 
+# FCS hard codes
+counties_grouped.os <- counties_grouped.os %>%
+  mutate(
+    school = case_when(
+      school == "UC Davis" ~ "Portland State",
+      school == "South Dakota State" ~ "Southern Illinois",
+      school == "Montana" ~ "Weber State",
+      school == "Eastern Washington" ~ "Weber State",
+      school == "East Tennessee State" ~ "Chattanooga",
+      school == "Incarnate Word" ~ "McNeese State",
+      TRUE ~ school
+    ),
+    school = if_else(school == "UT San Antonio", "UTSA", school),
+    logos = if_else(school == "UTSA", "http://a.espncdn.com/i/teamlogos/ncaa/500/2636.png", logos)
+  ) 
+
+# Summary dataframe
 counties_sum.os <- counties_grouped.os %>%
   group_by(school) %>%
   summarize(
+    n_territories = n(),
     sum_total = sum(sum(sum_total, na.rm = T)),
     sum_land = sum(sum(sum_land, na.rm = T)),
     sum_water = sum(sum(sum_water, na.rm = T)),
     sum_population = sum(sum(total_pop, na.rm = T)),
     sum_n = sum(sum(n, na.rm = T))
     ) %>%
-  left_join(., ds_teams %>% dplyr::select(school, logos), by = "school")
+  left_join(ds_teams %>% dplyr::select(school, logos), by = "school") %>%
+  distinct()
 
+# function to define logo size; scales with log(territory size)
 logoIcons.os <- icons(
   iconUrl = counties_grouped.os$logos,
-  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10,
-  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 10
+  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 11,
+  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 11
 )
 
+# This is the actual map -------------------------------------------------------
 leaflet() %>%
   setView(lng = -95.24580, lat = 38.95909, zoom = 4) %>%
-  addPolygons(data = counties_grouped.os, smoothFactor = 0.2, color = ~fill_team(school), fillOpacity = 0.9, label = ~school, weight = 0.8,
-              highlightOptions = highlightOptions(color = 'white', weight = 1,
-                                                  bringToFront = FALSE)) %>%
-  addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
+  addPolygons(data = counties_grouped.os, 
+              smoothFactor = 0.2, 
+              color = "white", 
+              fillColor = ~fill_team(school), 
+              fillOpacity = 0.9, 
+              label = ~school, 
+              weight = 1, 
+              group = "Current Map",
+              highlightOptions = highlightOptions(color = 'white', weight = 1, bringToFront = FALSE)
+              ) %>%
+  addCircleMarkers(data = ds_teams, 
+                   label = ~school, 
+                   stroke = T, 
+                   fillOpacity = 0.8, 
+                   weight = 0.75, 
+                   color = "black", 
+                   fillColor = ~color, 
+                   radius = 5, 
+                   group = "Toggle School Locations",
                    popup = paste0("<center><img src=", ds_teams$logos, " width = '50' height = '50'>",
                                   "<br><hr><b>", ds_teams$school, "</center>",
                                   "</b><br>", ds_teams$conference,
                                   "<br>Mascot: ", ds_teams$mascot
                    )) %>%
-  addMarkers(data = st_centroid(counties_grouped.os), label = ~school, icon = logoIcons.os,
+  addMarkers(data = st_centroid(counties_grouped.os), label = ~school, icon = logoIcons.os, group = "Current Map",
              popup = paste0(
                "<center><b>", counties_grouped.os$city, " Territory, home of the ", counties_grouped.os$mascot, "</b><br></center>",
                "<center>Currently Controlled by ", counties_grouped.os$school, "<br></center>",
@@ -474,15 +312,31 @@ leaflet() %>%
                "Territory Water area: ", format(round(counties_grouped.os$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
                "No. of Counties in Territory: ", format(counties_grouped.os$n, nsmall = 1, big.mark = ","), "<br>",
                "Territory Population: ", format(counties_grouped.os$total_pop, big.mark = ",")
-             )
-             ) %>%
-  addTiles()
-
+             )) %>%
+  addPolylines(data = counties,
+               color = "black", 
+               weight = 0.2, 
+               smoothFactor = 0,
+               opacity = 1, 
+               group = "Toggle County Borders") %>%
+  addPolylines(data = states, 
+               color = "black",
+               weight = 0.4, 
+               smoothFactor = 0, 
+               opacity = 1, 
+               group = "Toggle State Borders") %>%
+  addTiles() %>%
+  addLayersControl(
+    baseGroups = c("Current Map"),
+    overlayGroups = c("Toggle School Locations", "Toggle County Borders", "Toggle State Borders"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  hideGroup(c("Toggle School Locations", "Toggle County Borders", "Toggle State Borders"))
 
 
 ```
 
-> This is the old school-style imperialism map. Each team starts with the counties closest to it, and then loses all their land to their opponents when defeated. You can hover over each territory to see its current owner (or tap if you're on mobile).
+> This is the CFB "Imperialism Map". The rules are as follows: at the beginning of the season, every county in the US (minus Alaska, which is not home to any FBS teams) was divided amongst the 130 FBS college football teams, with each county going to the team whose stadium is closest to the county's center. From this starting map, the teams gain or lose land based on their performance on the field; every time a game concludes, the loser cedes whatever lands they control to the victor. You can click (or tap on mobile) on team logos to see the name of the "territory", the current owner, the original owner, and a few other stats as well. More stats can be found on the "Stat Explorer" page under the "Imperilaism Map" tab at the top of this page.
 
 Row
 -----------------------------------------------------------------------
@@ -499,7 +353,7 @@ renderValueBox({
     caption = paste0(
       "Biggest Domain: ",
       format(round(counties_sum.os %>% slice_max(order_by = sum_total, n = 1, with_ties = F) %>%
-                     pull(var = sum_total), 1), big.mark = ","), "Sq. miles"),
+                     pull(var = sum_total), 1), big.mark = ","), " Sq. miles"),
     color = ds_teams %>% filter(school == top_domain.os) %>% pull(var = color)
   )
 
@@ -518,27 +372,27 @@ renderValueBox({
     caption = paste0(
       "Largest Water Area: ",
       format(round(counties_sum.os %>% slice_max(order_by = sum_water, n = 1, with_ties = F) %>%
-                     pull(var = sum_water), 1), big.mark = ","), "Sq. miles"),
+                     pull(var = sum_water), 1), big.mark = ","), " Sq. miles"),
     color = ds_teams %>% filter(school == top_water.os) %>% pull(var = color)
   )
 
 })
 ```
 
-### Biggest Land Domain {.no-mobile}
+### Most Territories Controlled {.no-mobile}
 
 ```{r}
-top_land.os <- counties_sum.os %>% slice_max(order_by = sum_land, n = 1, with_ties = F) %>% pull(var = school)
+top_territories.os <- counties_sum.os %>% slice_max(order_by = n_territories, n = 1, with_ties = F) %>% pull(var = school)
 
 renderValueBox({
 
   valueBox(
-    value = top_land.os,
+    value = top_territories.os,
     caption = paste0(
-      "Largest Land Area: ",
-      format(round(counties_sum.os %>% slice_max(order_by = sum_land, n = 1, with_ties = F) %>%
-                     pull(var = sum_land), 1), big.mark = ","), "Sq. miles"),
-    color = ds_teams %>% filter(school == top_land.os) %>% pull(var = color)
+      "Most Territories Controlled: ",
+      format(round(counties_sum.os %>% slice_max(order_by = n_territories, n = 1, with_ties = F) %>%
+                     pull(var = n_territories), 1), big.mark = ",")),
+    color = ds_teams %>% filter(school == top_territories.os) %>% pull(var = color)
   )
 
 })
@@ -596,7 +450,6 @@ Row
 ```{r}
 
 renderDataTable({
-
 
   DT::datatable(
     data = counties_sum.os %>%
@@ -702,7 +555,7 @@ ds_teams.react <- eventReactive(input$input_execute, {
     latitude = if_else(school == "Illinois", 40.1020, latitude),
     longitude = if_else(school == "Illinois", -88.2272, longitude),
     color = if_else(school == "LSU", "#461D7C", color)
-  )
+  ) 
 
   ds_rank <- cfbd_rankings(year = input$year_input, season_type = input$type_input) %>%
   filter(poll == if_else(input$year_input <= 2013, "Coaches Poll", "AP Top 25"),
@@ -712,7 +565,8 @@ ds_teams.react <- eventReactive(input$input_execute, {
 
   ds_teams <- ds_teams_ %>%
   left_join(., ds_rank) %>%
-  filter(!is.na(rank))
+  filter(!is.na(rank)) %>%
+    distinct()
 
   return(ds_teams)
   
@@ -741,7 +595,7 @@ for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
     (ds_teams.react()$points) * (1 / sf::st_distance(pnts_sf, counties[i, ]))
     ), ]
-  print(paste0(round(100 * i / nrow(counties), 2), "%"))
+#  print(paste0(round(100 * i / nrow(counties), 2), "%"))
   setProgress(value = i / nrow(counties))
 }
 closest_ <- rbindlist(closest_)
@@ -853,7 +707,7 @@ leaflet() %>%
 
 ```
 
-> This is a power projection map like the one one the main page, showing the map for the season / week entered in the sidebar. Seasons prior to 2015 use Coaches Poll points, and seasons 2015 and onward use AP Poll points. The window above will be blank until you generate a map using the "Generate Map" button.
+> This is the CFB "Power Projection Map". This map displays the results of any AP poll since 2001 (seasons prior to 2015 use the Coaches Poll) with the teams controlling land around their home stadium based on how many points they were awarded in the latest poll. The window above will be blank until you generate a map using the "Generate Map" button; you can enter any season 2001-2021, then select any of the available weeks (including the postseason when available), and click "Generate Map" to see what the college football landscape looked like in that week. Check out Week 13 of 2007 to see a week where Alabama was unranked and Kansas was the #2 team in the nation!
 
 
 Row

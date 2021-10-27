@@ -7,6 +7,9 @@ library(ggimage)
 # Collecting data
 # ds_betting_ <- cfbd_betting_lines(year = 2021) 
   
+source("get-betting-record.R")
+
+
 ds_betting_ <- tibble()
 
 years <- c(2021:2021) 

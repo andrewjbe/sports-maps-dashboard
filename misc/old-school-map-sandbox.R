@@ -31,69 +31,69 @@ ds_teams <- cfbd_team_info(year = year(today())) %>%
     longitude = if_else(school == "Illinois", -88.2272, longitude)
   )
 
-ds_results_ <- cfbd_game_info(year = 2017)
+ds_results_ <- cfbd_game_info(year = 2021)
 
-# pnts_sf <- st_as_sf(ds_teams, coords = c("longitude", "latitude"))
-# st_crs(pnts_sf) <- 4326
-# 
-# counties <- counties(cb = TRUE, resolution = "20m")
-# st_crs(counties) <- 4326
-# 
-# counties <- counties %>%
-#   mutate(
-#     n = row_number()
-#   )
-# 
-# closest_ <- list()
-# for (i in seq_len(nrow(counties))) {
-#   closest_[[i]] <- pnts_sf[which.min(sf::st_distance(pnts_sf, counties[i, ])
-#   ), ]
-#   print(paste0(round(100 * i / nrow(counties), 2), "%"))
-# }
-# closest_ <- rbindlist(closest_)
-# 
-# closest_ <- closest_ %>%
-#   dplyr::select(school, color, logos) %>%
-#   mutate(
-#     n = row_number()
-#   )
-# 
-# counties_ <- left_join(counties, closest_, by = "n")
-# 
-# # counties_pop <- get_estimates(geography = "county", product = "population") %>%
-# #   rename(estimate = value)
-# # write_csv(counties_pop, "counties_pop.csv")
-# 
-# counties_pop <- read_csv("counties_pop.csv")
-# 
-# counties_ <- merge(counties_, counties_pop, by = "GEOID")
-# 
-# counties_ <- counties_ %>%
-#   rename(
-#     population = estimate
-#   ) %>%
-#   dplyr::select(!variable)
-# 
-# # Removes Alaska
-# counties_ <- counties_ %>%
-#   filter(STATEFP != "02",
-#          STATEFP != "72")
-# 
-# counties_grouped.os <- counties_ %>%
-#   group_by(school, logos, color) %>%
-#   summarise(
-#     n = n(),
-#     sum_land = sum(ALAND) * 0.000000386102,
-#     sum_water = sum(AWATER) * 0.000000386102,
-#     sum_total = sum_land + sum_water,
-#     total_pop = sum(population)
-#   ) %>%
-#   st_cast("MULTIPOLYGON")
-# 
-# counties_grouped.os <- counties_grouped %>%
-#   left_join(., ds_teams)
-# 
-# save(counties_grouped.os, file = "old_school_imperialism_base_map.Rdata")
+pnts_sf <- st_as_sf(ds_teams, coords = c("longitude", "latitude"))
+st_crs(pnts_sf) <- 4326
+
+counties <- counties(cb = TRUE, resolution = "20m")
+counties <- st_transform(counties, 4326)
+
+counties <- counties %>%
+  mutate(
+    n = row_number()
+  )
+
+closest_ <- list()
+for (i in seq_len(nrow(counties))) {
+  closest_[[i]] <- pnts_sf[which.min(sf::st_distance(pnts_sf, st_centroid(counties[i, ]))
+  ), ]
+  print(paste0(round(100 * i / nrow(counties), 2), "%"))
+}
+closest_ <- rbindlist(closest_)
+
+closest_ <- closest_ %>%
+  dplyr::select(school, color, logos) %>%
+  mutate(
+    n = row_number()
+  )
+
+counties_ <- left_join(counties, closest_, by = "n")
+
+# counties_pop <- get_estimates(geography = "county", product = "population") %>%
+#   rename(estimate = value)
+# write_csv(counties_pop, "counties_pop.csv")
+
+counties_pop <- read_csv("counties_pop.csv")
+
+counties_ <- merge(counties_, counties_pop, by = "GEOID")
+
+counties_ <- counties_ %>%
+  rename(
+    population = estimate
+  ) %>%
+  dplyr::select(!variable)
+
+# Removes Alaska
+counties_ <- counties_ %>%
+  filter(STATEFP != "02",
+         STATEFP != "72")
+
+counties_grouped.os <- counties_ %>%
+  group_by(school, logos, color) %>%
+  summarise(
+    n = n(),
+    sum_land = sum(ALAND) * 0.000000386102,
+    sum_water = sum(AWATER) * 0.000000386102,
+    sum_total = sum_land + sum_water,
+    total_pop = sum(population)
+  ) %>%
+  st_cast("MULTIPOLYGON")
+
+counties_grouped.os <- counties_grouped.os %>%
+  left_join(., ds_teams)
+
+save(counties_grouped.os, file = "old_school_imperialism_base_map-3.Rdata")
 
 load("old_school_imperialism_base_map.Rdata")
 
@@ -132,17 +132,38 @@ library(mapview)
 
 logoIcons.os <- icons(
   iconUrl = counties_grouped.os$logos,
-  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 20,
-  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 20
+  iconWidth = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 25,
+  iconHeight = (as.numeric(log(st_area(counties_grouped.os))) - 21) * 25
+)
+
+# County borders overlay
+counties <- counties(cb = TRUE, resolution = "20m")
+counties <- st_transform(counties, 4326)
+  
+# Reprojection
+
+epsg2163 <- leafletCRS(
+  crsClass = "L.Proj.CRS",
+  code = "ESRI:102003",
+  proj4def = "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+  resolutions = 2^(16:7)
 )
 
 # change to 'color = ~faction' to switch to SEC vs. Alliance map
 
-m <- leaflet(height = 1600, width = 3000) %>%
-  setView(lng = -95.24580, lat = 38.95909, zoom = 6) %>%
-  addPolygons(data = counties_grouped.os, smoothFactor = 0.2, color = "white", fillColor = ~fill_team(school), fillOpacity = 0.9, label = ~school, weight = 1,
-              highlightOptions = highlightOptions(color = 'white', weight = 1,
-                                                  bringToFront = FALSE)) %>%
+m <- leaflet(options = leafletOptions(crs = epsg2163),
+             height = 1600, 
+             width = 3000) %>%
+  setView(lng = -98.24580, lat = 38.85909, zoom = 5) %>%
+  addPolygons(data = counties_grouped.os, 
+              smoothFactor = 0.2, 
+              color = "white", 
+              fillColor = ~fill_team(school), 
+              fillOpacity = 0.9, 
+              label = ~school, 
+              weight = 0,
+              stroke = F
+              ) %>%
   addMarkers(data = st_centroid(counties_grouped.os), label = ~school, icon = logoIcons.os,
              popup = paste0(
                "<center><b>", counties_grouped.os$city, " Territory, home of the ", counties_grouped.os$mascot, "</b><br></center>",
@@ -152,10 +173,18 @@ m <- leaflet(height = 1600, width = 3000) %>%
                "Territory Water area: ", format(round(counties_grouped.os$sum_water, 1), nsmall = 1, big.mark = ","), " sq. miles<br>",
                "No. of Counties in Territory: ", format(counties_grouped.os$n, nsmall = 1, big.mark = ","), "<br>",
                "Territory Population: ", format(counties_grouped.os$total_pop, big.mark = ",")
-             )
-  )
-m
+             )) %>%
+  addPolylines(data = counties, color = "black", weight = 0.2, smoothFactor = 0, opacity = 1)  %>%
+#  addPolylines(data = states, color = "black", weight = 1, smoothFactor = 0, opacity = 1) %>%
+  addPolylines(data = counties_grouped.os, color = "black", weight = 1.5, smoothFactor = 0, opacity = 1)  
+  # addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
+  #                  popup = paste0("<center><img src=", ds_teams$logos, " width = '50' height = '50'>",
+  #                                 "<br><hr><b>", ds_teams$school, "</center>",
+  #                                 "</b><br>", ds_teams$conference,
+  #                                 "<br>Mascot: ", ds_teams$mascot
+  #                  ))
 
+# m
 
 mapshot(m, file = paste0("imperialism-map-", today(), ".png"), selfcontained = F)
 
@@ -259,26 +288,30 @@ ds_rank <- cfbd_rankings(year = year(today()), season_type = "regular") %>%
   dplyr::select(c(week, poll, season_type, rank, school, first_place_votes, points))
 
 ds_teams <- ds_teams_ %>%
-  left_join(., ds_rank)
+  left_join(., ds_rank) %>%
+  distinct()
 
 pnts_sf <- st_as_sf(ds_teams, coords = c("longitude", "latitude"))
 st_crs(pnts_sf) <- 4326
 
 counties <- counties(cb = TRUE, resolution = "20m")
-st_crs(counties) <- 4326
+counties <- st_transform(counties, 4326)
 
 counties <- counties %>%
   mutate(
     n = row_number()
-  )
+  ) %>%
+  distinct()
 
 closest_ <- list()
 for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
     (ds_teams$points) * (1 / sf::st_distance(pnts_sf, counties[i, ]))
     ), ]
- print(paste0(round(100 * i / nrow(counties), 2), "%"))
-}
+  
+ if(i %% 322 == 0){print(paste0(round(100 * i / nrow(counties), 2), "%"))}
+
+ }
 closest_ <- rbindlist(closest_)
 
 closest_ <- closest_ %>%
@@ -347,9 +380,10 @@ counties_grouped <- counties_grouped %>%
     color = if_else(school == "Michigan State", "#ffffff", color),
     color = if_else(school == "UCLA", "#F2A900", color),
     color = if_else(school == "USC", "#990000", color),
-    color = if_else(school == "Cincinnati", "#E00122", color),
+    color = if_else(school == "UT San Antonio", "#F15A22", color),
+    color = if_else(school == "Cincinnati", "#444444", color),
     # overlapping logos, edit as neeeded
-  #  logos = if_else(grepl("Alabama", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos),
+    logos = if_else(grepl("Ohio State", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos),
     logos = if_else(school == "Oregon", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2483.png", logos),
     logos = if_else(school == "Oklahoma", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/201.png", logos),
     logos = if_else(school == "Kansas State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png", logos)
@@ -360,13 +394,31 @@ counties_grouped <- counties_grouped %>%
 logoIcons <- icons(
   iconUrl = counties_grouped$logos,
 #  iconWidth = 30, iconHeight = 30,
-  iconWidth = (as.numeric(log(st_area(counties_grouped))) - 21) * 25,
-  iconHeight = (as.numeric(log(st_area(counties_grouped))) - 21) * 25
+  iconWidth = (as.numeric(log(st_area(counties_grouped))) - 20) * 25,
+  iconHeight = (as.numeric(log(st_area(counties_grouped))) - 20) * 25
 )
 
-p <- leaflet(height = 1600, width = 3000) %>%
-  setView(lng = -95.24580, lat = 38.95909, zoom = 6) %>%
-  addPolygons(data = counties_grouped, smoothFactor = 0.2, color = ~color, fillOpacity = 0.8, label = ~school, weight = 0.8,
+# Reprojection
+
+epsg2163 <- leafletCRS(
+  crsClass = "L.Proj.CRS",
+  code = "ESRI:102003",
+  proj4def = "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+  resolutions = 2^(16:7)
+)
+
+p <- leaflet(options = leafletOptions(crs = epsg2163),
+             height = 1600, 
+             width = 3000) %>%
+  setView(lng = -98.24580, 
+          lat = 38.85909, 
+          zoom = 5) %>%
+  addPolygons(data = counties_grouped, 
+              smoothFactor = 0.2, 
+              color = ~color, 
+              fillOpacity = 0.8, 
+              label = ~school, 
+              weight = 0.8,
               highlightOptions = highlightOptions(color = 'white', weight = 1,
                                                   bringToFront = FALSE)) %>%
   # addCircleMarkers(data = ds_teams, label = ~school, stroke = T, fillOpacity = 0.8, weight = 0.75, color = "black", fillColor = ~color, radius = 5,
@@ -378,8 +430,11 @@ p <- leaflet(height = 1600, width = 3000) %>%
   # addCircleMarkers(data = counties_grouped, label = "", lat = ~latitude, lng = ~longitude,
   #                  stroke = F, color = "white", fill = "white", fillOpacity = 0.8, radius = 16) %>%
   addMarkers(data = st_centroid(counties_grouped, of_largest_polygon = T), label = ~school, # lat = ~latitude, lng = ~longitude,
-             icon = logoIcons)
-
+             icon = logoIcons) %>%
+  addPolylines(data = counties, color = "black", weight = 0.2, smoothFactor = 0, opacity = 1)  %>%
+  #  addPolylines(data = states, color = "black", weight = 1, smoothFactor = 0, opacity = 1) %>%
+  addPolylines(data = counties_grouped, color = "black", weight = 1.5, smoothFactor = 0, opacity = 1)  
+p
 
 
 mapshot(p, file = paste0("pp-map-", today(), ".png"), selfcontained = F)
@@ -452,7 +507,9 @@ for (i in seq_len(nrow(counties))) {
   closest_[[i]] <- pnts_sf[which.max(
     (ds_teams$points) * (1 / sf::st_distance(pnts_sf, counties[i, ])^2)
   ), ]
-  print(paste0(round(100 * i / nrow(counties), 2), "%"))
+  
+  if(i %% 10 == 0){print(paste0(round(100 * i / nrow(counties), 2), "% completed..."))}
+  
 }
 closest_ <- rbindlist(closest_)
 
@@ -523,6 +580,7 @@ counties_grouped <- counties_grouped %>%
     color = if_else(school == "UCLA", "#F2A900", color),
     color = if_else(school == "USC", "#990000", color),
     color = if_else(school == "Cincinnati", "#E00122", color),
+    color = if_else(school == "UT San Antonio", "#F15A22", color),
     # overlapping logos, edit as neeeded
     #  logos = if_else(grepl("Alabama", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos),
     logos = if_else(school == "Oregon", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2483.png", logos),
@@ -536,8 +594,8 @@ counties_grouped <- counties_grouped %>%
 logoIcons <- icons(
   iconUrl = counties_grouped$logos,
   #  iconWidth = 30, iconHeight = 30,
-  iconWidth = (as.numeric(log(st_area(counties_grouped))) - 21) * 25,
-  iconHeight = (as.numeric(log(st_area(counties_grouped))) - 21) * 25
+  iconWidth = (as.numeric(log(st_area(counties_grouped))) - 20) * 25,
+  iconHeight = (as.numeric(log(st_area(counties_grouped))) - 20) * 25
 )
 
 p <- leaflet(height = 1600, width = 3000) %>%
@@ -546,9 +604,11 @@ p <- leaflet(height = 1600, width = 3000) %>%
               highlightOptions = highlightOptions(color = 'white', weight = 1,
                                                   bringToFront = FALSE)) %>%
   addMarkers(data = st_centroid(counties_grouped, of_largest_polygon = T), label = ~school, # lat = ~latitude, lng = ~longitude,
-             icon = logoIcons) %>% 
-  addTiles() 
-
+             icon = ~logoIcons) %>%
+  addPolylines(data = counties, color = "black", weight = 0.2, smoothFactor = 0, opacity = 1)  %>%
+  #  addPolylines(data = states, color = "black", weight = 1, smoothFactor = 0, opacity = 1) %>%
+  addPolylines(data = counties_grouped.os, color = "black", weight = 1.5, smoothFactor = 0, opacity = 1)  
+p
 
 mapshot(p, file = paste0(year, "-pp-map-week-", j, ".png"), selfcontained = F)
 
