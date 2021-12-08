@@ -34,6 +34,7 @@ options(scipen = 999)
 # https://saiemgilani.github.io/cfbfastR/reference/register_cfbd.html
 # Sys.setenv(CFBD_API_KEY="")
 
+# This is where I have my keys stored; comment out / delete if using above
 source("keys.R")
 
 ds_teams <- cfbd_team_info(year = year(today())) %>%
@@ -51,14 +52,18 @@ ds_teams <- cfbd_team_info(year = year(today())) %>%
 #    color = if_else(school == "Michigan State", "#ffffff", color),
     color = if_else(school == "Utah", "#CC0000", color),
     color = if_else(school == "UCLA", "#F2A900", color),
-    color = if_else(school == "Miami (OH)", "black", color),
+    color = if_else(school == "Miami (OH)", "#000000", color),
     color = if_else(school == "Fresno State", "#13284c", color),
     color = if_else(school == "Wisconsin", "#FFFFFF", color),
     color = if_else(school == "USC", "#990000", color),
     color = if_else(school == "Cincinnati", "#444444", color),
-    color = if_else(school == "San Diego State", "#A6192E", color),
     color = if_else(school == "UT San Antonio", "#F15A22", color),
     color = if_else(school == "Pittsburgh", "#FFB81C", color),
+    color = if_else(school == "West Virginia", "#EAAA00", color),
+    color = if_else(school == "Utah State", "#6890B8", color),
+    color = if_else(school == "Minnesota", "#FFCC33", color),
+    # color = if_else(school == "Toledo", "#fae252", color),
+    color = if_else(school == "San Diego State", "#FFFFFF", color),
     logos = if_else(school == "Oregon", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2483.png", logos),
     logos = if_else(school == "Oklahoma", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/201.png", logos),
     logos = if_else(school == "Kansas State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png", logos),
@@ -66,8 +71,13 @@ ds_teams <- cfbd_team_info(year = year(today())) %>%
     logos = if_else(school == "Air Force", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2005.png", logos),
     logos = if_else(school == "Michigan State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/127.png", logos),
     logos = if_else(school == "Nevada", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2440.png", logos),
+    logos = if_else(school == "California", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/25.png", logos),
+    logos = if_else(school == "North Texas", "https://kuathletics.com/wp-content/uploads/2021/11/North_Texas_Mean_Green_logo.svg_.png", logos),
     school = if_else(school == "UT San Antonio", "UTSA", school)
   )
+
+# function to apply the correct colors to each territory 
+fill_team <- colorFactor(ds_teams$color, ds_teams$school, na.color = "grey", ordered = TRUE)
 
 # Creating sf object w/ a point for every stadium location
 pnts_sf <- st_as_sf(ds_teams, coords = c("longitude", "latitude"))
@@ -166,12 +176,16 @@ counties_grouped.os <- counties_grouped.os %>%
     color = if_else(school == "UCLA", "#F2A900", color),
     color = if_else(school == "Miami (OH)", "black", color),
     color = if_else(school == "Wisconsin", "#FFFFFF", color),
-    color = if_else(school == "San Diego State", "#A6192E", color),
     color = if_else(school == "Fresno State", "#13284c", color),
     color = if_else(school == "USC", "#990000", color),
     color = if_else(school == "UT San Antonio", "#F15A22", color),
     color = if_else(school == "Cincinnati", "#444444", color),
     color = if_else(school == "Pittsburgh", "#FFB81C", color),
+    color = if_else(school == "West Virginia", "#EAAA00", color),
+    # color = if_else(school == "Toledo", "#fae252", color),
+    color = if_else(school == "Utah State", "#6890B8", color),
+    color = if_else(school == "Minnesota", "#FFCC33", color),
+    color = if_else(school == "San Diego State", "#FFFFFF", color),
     logos = if_else(school == "Oregon", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2483.png", logos),
     logos = if_else(school == "Oklahoma", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/201.png", logos),
     logos = if_else(school == "Kansas State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png", logos),
@@ -179,13 +193,17 @@ counties_grouped.os <- counties_grouped.os %>%
     logos = if_else(school == "Air Force", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2005.png", logos),
     logos = if_else(school == "Nevada", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2440.png", logos),
     logos = if_else(school == "Michigan State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/127.png", logos),
+    logos = if_else(school == "North Texas", "https://kuathletics.com/wp-content/uploads/2021/11/North_Texas_Mean_Green_logo.svg_.png", logos),
     school = if_else(school == "UT San Antonio", "UTSA", school)
   )
 
-# function to apply the correct colors to each territory 
-fill_team <- colorFactor(ds_teams$color, ds_teams$school)
-
 ds_results <- ds_results_ %>%
+  # OU losing hotfix :(
+  mutate(
+    home_points = if_else(home_team == "Baylor" & away_team == "Oklahoma", 1, as.double(home_points)),
+    away_points = if_else(home_team == "Baylor" & away_team == "Oklahoma", 0, as.double(away_points))
+  ) %>%
+  #
   filter(!is.na(home_points)) %>%
   mutate(
     winner = if_else(home_points > away_points, home_team, away_team),
@@ -200,19 +218,19 @@ ds_results <- ds_results_ %>%
   mutate(
     winner_logos = case_when(
       winner == "UC Davis" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/2502.png",
+        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
       winner == "Eastern Washington" ~ 
-        "https://a.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2692.png",
+        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
       winner == "South Dakota State" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/79.png",
-      winner == "Holy Cross" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/107.png",
+        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
+      # winner == "Holy Cross" ~ 
+      #   "https://a.espncdn.com/i/teamlogos/ncaa/500/155.png", # 
       winner == "East Tennessee State" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/236.png",
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/2193.png", # East Tennessee State
       winner == "Montana" ~ 
-        "https://a.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2692.png",
+        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
       winner == "Incarnate Word" ~ 
-        "https://a.espncdn.com/combiner/i?img=/i/teamlogos/ncaa/500/2377.png",
+        "https://a.espncdn.com/i/teamlogos/ncaa/500/2534.png", # Sam Houston State
       TRUE ~ winner_logos
     ),
     # default logo for if the others are missing
@@ -243,17 +261,19 @@ for(i in (1:nrow(ds_results))){
 counties_grouped.os <- counties_grouped.os %>%
   mutate(
     school = case_when(
-      school == "UC Davis" ~ "Portland State",
-      school == "South Dakota State" ~ "Southern Illinois",
-      school == "Montana" ~ "Weber State",
-      school == "Eastern Washington" ~ "Weber State",
-      school == "East Tennessee State" ~ "Chattanooga",
-      school == "Incarnate Word" ~ "McNeese State",
+      school == "UC Davis" ~ "South Dakota State",
+  #    school == "South Dakota State" ~ "North Dakota",
+      school == "Montana" ~ "South Dakota State",
+      school == "Eastern Washington" ~ "South Dakota State",
+      school == "Incarnate Word" ~ "Sam Houston State",
+  #    school == "East Tennessee State" ~ "Mercer",
       TRUE ~ school
     ),
-    school = if_else(school == "UT San Antonio", "UTSA", school),
-    logos = if_else(school == "UTSA", "http://a.espncdn.com/i/teamlogos/ncaa/500/2636.png", logos)
-  ) 
+    school = if_else(school == "UTSA", "North Texas", school),
+    logos = if_else(school == "North Texas", "https://kuathletics.com/wp-content/uploads/2021/11/North_Texas_Mean_Green_logo.svg_.png", logos),
+    school = if_else(school == "Appalachian State", "Louisiana", school),
+    logos = if_else(school == "Louisiana", "https://a.espncdn.com/i/teamlogos/ncaa/500/309.png", logos)
+  )
 
 # Summary dataframe
 counties_sum.os <- counties_grouped.os %>%
@@ -470,8 +490,8 @@ renderDataTable({
         'Total Territory (sq. mi.)' = sum_total,
         'Total Population' = sum_population
       ),
-    rownames = FALSE, options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip',
-    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')),
+    rownames = FALSE, 
+    options = list(scrollY = 550, pageLength = 100, dom = 'Bfrtip', buttons = c('copy', 'csv', 'excel', 'pdf', 'print')),
     extensions = 'Buttons',
     escape = FALSE
   ) %>%

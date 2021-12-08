@@ -46,8 +46,8 @@ ds_betting <- ds_betting_ |>
   arrange(week) |>
   filter(!is.na(home_score),
          !is.na(away_score),
-         # home_conference != "FCS",
-         # away_conference != "FCS",
+         home_conference != "FCS",
+         away_conference != "FCS"
          )
 
 favorites <- ds_betting |>

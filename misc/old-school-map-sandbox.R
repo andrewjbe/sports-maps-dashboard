@@ -269,6 +269,8 @@ options(scipen = 999)
 
 # Sys.setenv(CFBD_API_KEY="")
 
+# j <- 13
+
 ds_teams_ <- cfbd_team_info(year = year(today())) %>%
   unnest(cols = c(logos)) %>%
   distinct(team_id, .keep_all = TRUE) %>%
@@ -285,6 +287,7 @@ ds_rank <- cfbd_rankings(year = year(today()), season_type = "regular") %>%
   filter(poll == "AP Top 25",
          !is.na(points)) %>%
   filter(week == max(week)) %>%
+  # filter(week == j) %>%
   dplyr::select(c(week, poll, season_type, rank, school, first_place_votes, points))
 
 ds_teams <- ds_teams_ %>%
@@ -383,9 +386,12 @@ counties_grouped <- counties_grouped %>%
     color = if_else(school == "UT San Antonio", "#F15A22", color),
     color = if_else(school == "Cincinnati", "#444444", color),
     # overlapping logos, edit as neeeded
-    logos = if_else(grepl("Ohio State", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos),
+    # logos = if_else(grepl("Ohio State", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos),
+    # logos = if_else(grepl("Texas A&M", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos),
+    # logos = if_else(grepl("BYU", school), "https://upload.wikimedia.org/wikipedia/commons/4/48/BLANK_ICON.png", logos),
     logos = if_else(school == "Oregon", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2483.png", logos),
     logos = if_else(school == "Oklahoma", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/201.png", logos),
+    logos = if_else(school == "Clemson", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/228.png", logos),
     logos = if_else(school == "Kansas State", "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png", logos)
   )
 
@@ -394,8 +400,8 @@ counties_grouped <- counties_grouped %>%
 logoIcons <- icons(
   iconUrl = counties_grouped$logos,
 #  iconWidth = 30, iconHeight = 30,
-  iconWidth = (as.numeric(log(st_area(counties_grouped))) - 20) * 25,
-  iconHeight = (as.numeric(log(st_area(counties_grouped))) - 20) * 25
+  iconWidth = (as.numeric(log(st_area(counties_grouped))) - 20) * 20,
+  iconHeight = (as.numeric(log(st_area(counties_grouped))) - 20) * 20
 )
 
 # Reprojection
@@ -437,7 +443,7 @@ p <- leaflet(options = leafletOptions(crs = epsg2163),
 p
 
 
-mapshot(p, file = paste0("pp-map-", today(), ".png"), selfcontained = F)
+mapshot(p, file = paste0("pp-map-week", j, ".png"), selfcontained = F)
 
 
 
