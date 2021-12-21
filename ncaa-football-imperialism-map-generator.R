@@ -17,6 +17,7 @@ library(lubridate)
 library(ggthemes)
 library(rgdal)
 library(maptools)
+library(extrafont)
 
 options(scipen = 999)
 
@@ -27,17 +28,15 @@ options(scipen = 999)
 # This is where I have my keys stored; comment out / delete if using above
 source("keys.R")
 
-# yr <- 2020
-# 
-# wk <- 1
+yr <- 2021
+wk <- 1
 
 for(i in 1:15) {
-  get_imperialism_map(yr = 2019, wk = i)
+  get_imperialism_map(yr = 2021, wk = i)
 }
 
-
 get_imperialism_map <- function(yr, wk) {
-
+  
 ds_teams <- cfbd_team_info(year = year(today())) %>%
   unnest(cols = c(logos)) %>%
   distinct(team_id, .keep_all = TRUE) %>%
@@ -157,41 +156,16 @@ counties_grouped.os <- counties_grouped.os %>%
   )
 
 ds_results <- ds_results_ %>%
-  # OU losing hotfix :(
-  mutate(
-    home_points = if_else(home_team == "Baylor" & away_team == "Oklahoma", 1, as.double(home_points)),
-    away_points = if_else(home_team == "Baylor" & away_team == "Oklahoma", 0, as.double(away_points))
-  ) %>%
-  #
   filter(!is.na(home_points)) %>%
   mutate(
     winner = if_else(home_points > away_points, home_team, away_team),
-    # winner = if_else(winner %in% ds_teams$school, winner, paste(winner, "(FCS)")),
+    # winner = if_else(winner %in% ds_teams$school & winner != "UTSA", winner, paste(winner, "(FCS)")),
     loser = if_else(home_points < away_points, home_team, away_team)
   ) %>%
   dplyr::select(winner, loser) %>%
   left_join(., ds_teams %>% dplyr::select(school, logos, color, conference) %>% rename(winner = school), by = "winner") %>%
   rename(winner_logos = logos, winner_color = color) %>%
-  # Handles FCS upsets; I have to hardcode these in because the FCS teams aren't in the api data
-  # TODO: check if they're in there now / find a way to avoid this
   mutate(
-    winner_logos = case_when(
-      winner == "UC Davis" ~ 
-        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
-      winner == "Eastern Washington" ~ 
-        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
-      winner == "South Dakota State" ~ 
-        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
-      # winner == "Holy Cross" ~ 
-      #   "https://a.espncdn.com/i/teamlogos/ncaa/500/155.png", # 
-      winner == "East Tennessee State" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/2193.png", # East Tennessee State
-      winner == "Montana" ~ 
-        "https://a1.espncdn.com/combiner/i?img=%2Fi%2Fteamlogos%2Fncaa%2F500%2F2571.png", # SDSU
-      winner == "Incarnate Word" ~ 
-        "https://a.espncdn.com/i/teamlogos/ncaa/500/2534.png", # Sam Houston State
-      TRUE ~ winner_logos
-    ),
     # default logo for if the others are missing
     winner_logos = if_else(is.na(winner_logos), "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.svg", winner_logos)
   ) %>%
@@ -216,37 +190,25 @@ for(i in (1:nrow(ds_results))){
   
 }
 
-# FCS hard codes
-counties_grouped.os <- counties_grouped.os %>%
+counties_grouped.os <- counties_grouped.os |>
   mutate(
-    school = case_when(
-      school == "UC Davis" ~ "South Dakota State",
-      #    school == "South Dakota State" ~ "North Dakota",
-      school == "Montana" ~ "South Dakota State",
-      school == "Eastern Washington" ~ "South Dakota State",
-      school == "Incarnate Word" ~ "Sam Houston State",
-      #    school == "East Tennessee State" ~ "Mercer",
-      TRUE ~ school
-    ),
-    school = if_else(school == "UTSA", "North Texas", school),
-    logos = if_else(school == "North Texas", "https://kuathletics.com/wp-content/uploads/2021/11/North_Texas_Mean_Green_logo.svg_.png", logos),
-    school = if_else(school == "Appalachian State", "Louisiana", school),
-    logos = if_else(school == "Louisiana", "https://a.espncdn.com/i/teamlogos/ncaa/500/309.png", logos)
+    school = if_else(school == "UT San Antonio", "UTSA", school),
+    logos = if_else(school == "UTSA", "http://a.espncdn.com/i/teamlogos/ncaa/500/2636.png", logos)
   )
 
 # Summary dataframe
-counties_sum.os <- counties_grouped.os %>%
-  group_by(school) %>%
-  summarize(
-    n_territories = n(),
-    sum_total = sum(sum(sum_total, na.rm = T)),
-    sum_land = sum(sum(sum_land, na.rm = T)),
-    sum_water = sum(sum(sum_water, na.rm = T)),
-    sum_population = sum(sum(total_pop, na.rm = T)),
-    sum_n = sum(sum(n, na.rm = T))
-  ) %>%
-  left_join(ds_teams %>% dplyr::select(school, logos), by = "school") %>%
-  distinct()
+# counties_sum.os <- counties_grouped.os %>%
+#   group_by(school) %>%
+#   summarize(
+#     n_territories = n(),
+#     sum_total = sum(sum(sum_total, na.rm = T)),
+#     sum_land = sum(sum(sum_land, na.rm = T)),
+#     sum_water = sum(sum(sum_water, na.rm = T)),
+#     sum_population = sum(sum(total_pop, na.rm = T)),
+#     sum_n = sum(sum(n, na.rm = T))
+#   ) %>%
+#   left_join(ds_teams %>% dplyr::select(school, logos), by = "school") %>%
+#   distinct()
 
 # This is the actual map -------------------------------------------------------
 library(mapview)
@@ -303,6 +265,31 @@ m <- leaflet(options = leafletOptions(crs = epsg2163),
 
 # m
 
-mapshot(m, file = paste0("imperialism-map-", yr, "-week-", wk, ".png"), selfcontained = F)
+file_name <- paste0("imp-maps-", yr, "/imperialism-map-", yr, "-week-", wk, ".png")
+
+mapshot(m, file = file_name, selfcontained = F)
+
+# Adding label
+
+img <- readPNG(file_name)
+h <- as.numeric(dim(img)[1])
+w <- as.numeric(dim(img)[2])
+
+text_to_plot <- 
+  tibble(x = 0.6,
+         y = 0.93,
+         text = paste0("CFB Imperialism Map - ",  yr, " season, Week ", wk))
+final_img <- ggplot(data = text_to_plot) + 
+  annotation_raster(img, xmin = 0, xmax = 1, ymin = 0, ymax = 1) +
+  geom_text(aes(x = x, y= y, label = text), size = 1200, family = "Windows Command Prompt") +
+  xlim(0,1) +
+  ylim(0,1) +
+  theme_map() 
+
+# final_img
+
+ggsave(file_name, plot = final_img, device = "png", width = w, height = h, limitsize = FALSE, dpi = 10)
+
+print(paste("Week", wk, "complete!"))
 
 }
